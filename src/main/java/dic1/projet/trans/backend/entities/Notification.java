@@ -1,6 +1,6 @@
 package dic1.projet.trans.backend.entities;
 
-import dic1.projet.trans.backend.enums.StatutNotification;
+import dic1.projet.trans.backend.enums.NotificationStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -16,8 +16,8 @@ import java.time.LocalDateTime;
 public class Notification {
     @Id
     private String idNotif;
-    private String contenu;
+    private String content;
     private LocalDateTime dateEnvoi;
-    private StatutNotification statut;
+    private NotificationStatus status;
     private String userId;
 }

@@ -9,13 +9,12 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "billets")
-public class Billet {
+@Document(collection = "reviews")
+public class Review {
     @Id
-    private String idBillet;
-    private String typeBillet;
-    private double prix;
-    private int quantiteInitiale;
-    private int quantiteVendue;
-    private String evenementId;
+    private String reviewId;
+    private int rating;
+    private String comment;
+    private String clientId;
+    private String eventId;
 }

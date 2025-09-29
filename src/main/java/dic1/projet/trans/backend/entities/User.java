@@ -12,17 +12,17 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "utilisateurs")
-public class Utilisateur {
+@Document(collection = "users")
+public class User {
     @Id
     private String idUser;
-    private String prenom;
-    private String nom;
+    private String firstName;
+    private String lastName;
     private String username;
     private String email;
-    private String telephone;
-    private String motDePasse;
-    private LocalDateTime dateInscription;
-    private String photoProfil;
+    private String phoneNumber;
+    private String password;
+    private LocalDateTime inscriptionDate;
+    private String profilePhoto;
     private Role role;
 }
