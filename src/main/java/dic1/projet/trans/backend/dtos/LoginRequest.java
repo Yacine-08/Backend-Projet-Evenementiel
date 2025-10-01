@@ -1,13 +1,21 @@
 package dic1.projet.trans.backend.dtos;
 
+import dic1.projet.trans.backend.validators.EmailOrPhoneRequired;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class LoginRequest {
-    private String Email;
+@EmailOrPhoneRequired
+public class LoginRequest implements AuthenticationRequest {
+    @Email(message = "Email invalide")
+    private String email;
 
-    String phoneNumber;
+    @Size(min = 9, message = "Le numéro de téléphone doit contenir au moins 9 chiffres")
+    @Pattern(regexp = "^[0-9+().\\s-]*$", message = "Numéro de téléphone invalide")
+    private String phoneNumber;
 
     @NotBlank(message = "Le mot de passe est obligatoire")
     private String password;

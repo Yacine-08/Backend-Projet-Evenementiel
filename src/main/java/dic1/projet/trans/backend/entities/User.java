@@ -25,7 +25,8 @@ public class User implements UserDetails {
     private String idUser;
     private String firstName;
     private String lastName;
-    private String username;
+    @Builder.Default
+    private String username = null;
     private String email;
     private String phoneNumber;
     private String password;

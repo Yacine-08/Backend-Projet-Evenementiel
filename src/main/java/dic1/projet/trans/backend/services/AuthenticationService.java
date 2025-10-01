@@ -46,16 +46,15 @@ public class AuthenticationService {
             throw new BadRequestException("Cet email est déjà utilisé");
         }
 
-        // verify if the username is already used
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new BadRequestException("Ce nom d'utilisateur est déjà utilisé");
+        // verify if the phone number is already used
+        if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            throw new BadRequestException("Cet numéro de téléphone est déjà utilisé");
         }
 
         // create user
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
-                .username(request.getUsername())
                 .email(request.getEmail())
                 .phoneNumber(request.getPhoneNumber())
                 .password(passwordEncoder.encode(request.getPassword()))
@@ -104,10 +103,13 @@ public class AuthenticationService {
             throw new BadRequestException("Compte non vérifié. Veuillez vérifier votre email ou votre téléphone.");
         }
 
-        // authenticate user
+        // authenticate user using email or phone number as username
+        String username = request.getEmail() != null ? 
+                request.getEmail() : request.getPhoneNumber();
+                
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        user.getUsername(), // toujours username pour Spring Security
+                        username,
                         request.getPassword()
                 )
         );
@@ -124,8 +126,17 @@ public class AuthenticationService {
 
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("Aucun compte avec cet email"));
+        User user;
+        
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            user = userRepository.findByEmail(request.getEmail())
+                    .orElseThrow(() -> new ResourceNotFoundException("Aucun compte avec cet email"));
+        } else if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()) {
+            user = userRepository.findByPhoneNumber(request.getPhoneNumber())
+                    .orElseThrow(() -> new ResourceNotFoundException("Aucun compte avec ce numéro de téléphone"));
+        } else {
+            throw new BadRequestException("Veuillez fournir un email ou un numéro de téléphone");
+        }
 
         // delete old tokens
         passwordResetTokenRepository.deleteByUserId(user.getIdUser());
@@ -141,8 +152,14 @@ public class AuthenticationService {
 
         passwordResetTokenRepository.save(resetToken);
 
-        // send email
-        emailService.sendPasswordResetEmail(user.getEmail(), token, user.getFirstName());
+        // send email or SMS based on user's preferred contact method
+        String firstName = (user.getFirstName() != null && !user.getFirstName().isBlank()) ?
+                user.getFirstName() : "User";
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            emailService.sendPasswordResetEmail(user.getEmail(), token, firstName);
+        } else if (user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank()) {
+            smsService.sendPasswordResetSms(user.getPhoneNumber(), token, firstName);
+        }
     }
 
     @Transactional
@@ -178,12 +195,12 @@ public class AuthenticationService {
         if (email != null && !email.isBlank()) {
             user = userRepository.findByEmail(email)
                     .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé avec cet email"));
-            // Supprimer anciens codes OTP pour cet email
+
             otpCodeRepository.deleteByEmail(email);
         } else if (phoneNumber != null && !phoneNumber.isBlank()) {
             user = userRepository.findByPhoneNumber(phoneNumber)
                     .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé avec ce numéro"));
-            // Supprimer anciens codes OTP pour ce numéro
+
             otpCodeRepository.deleteByPhoneNumber(phoneNumber);
         } else {
             throw new BadRequestException("Email ou numéro de téléphone requis");

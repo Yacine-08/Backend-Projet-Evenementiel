@@ -1,6 +1,5 @@
 package dic1.projet.trans.backend.validators;
 
-import dic1.projet.trans.backend.dtos.EmailOrPhoneRequiredValidator;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 import java.lang.annotation.*;
