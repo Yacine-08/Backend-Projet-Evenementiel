@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -35,8 +36,10 @@ public class User implements UserDetails {
     private String profilePhoto;
 
     private List<Role> roles = new ArrayList<>();
-    
-    // Méthode utilitaire pour vérifier si l'utilisateur a un rôle spécifique
+
+    private List<Event> favoriteEvents = new ArrayList<>();
+
+
     public boolean hasRole(Role role) {
         return roles.contains(role);
     }
@@ -70,5 +73,28 @@ public class User implements UserDetails {
     @Override
     public boolean isEnabled() {
         return enabled;
+    }
+
+    public void addFavorite(Event event) {
+        if (favoriteEvents == null) {
+            favoriteEvents = new ArrayList<>();
+        }
+        if (!favoriteEvents.contains(event)) {
+            favoriteEvents.add(event);
+        }
+    }
+
+    public void removeFavorite(Event event) {
+        if (favoriteEvents != null) {
+            favoriteEvents.remove(event);
+        }
+    }
+
+    public boolean hasFavorite(Event event) {
+        return favoriteEvents != null && favoriteEvents.contains(event);
+    }
+
+    public List<Event> getFavoriteEvents() {
+        return favoriteEvents != null ? favoriteEvents : new ArrayList<>();
     }
 }
