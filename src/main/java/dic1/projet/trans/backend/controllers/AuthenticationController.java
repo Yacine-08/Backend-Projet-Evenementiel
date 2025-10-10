@@ -7,6 +7,8 @@ import dic1.projet.trans.backend.enums.Role;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -21,11 +23,13 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
+@Tag(name = "Authentification", description = "Endpoints pour gérer l'inscription, la connexion et le profil utilisateur")
 public class AuthenticationController {
 
     private final AuthenticationService authenticationService;
 
     @PostMapping("/register")
+    @Operation(summary = "Inscription d'un utilisateur", description = "Crée un compte utilisateur et envoie un code OTP pour activer le compte.")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
         try {
             AuthenticationResponse response = authenticationService.register(request);
@@ -43,6 +47,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/login")
+    @Operation(summary = "Connexion", description = "Authentifie l'utilisateur et retourne un jeton JWT.")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
         try {
             AuthenticationResponse response = authenticationService.login(request);
@@ -60,6 +65,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/verify-otp")
+    @Operation(summary = "Vérifier le code OTP", description = "Valide le code OTP pour activer le compte utilisateur.")
     public ResponseEntity<?> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
         try {
             authenticationService.verifyOtp(request);
@@ -76,6 +82,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/resend-otp")
+    @Operation(summary = "Renvoyer le code OTP", description = "Génère et renvoie un nouveau code OTP par email ou SMS.")
     public ResponseEntity<?> resendOtp(@RequestBody ResendOtpRequest request) {
         try {
             if ((request.getEmail() == null || request.getEmail().isBlank()) &&
@@ -102,6 +109,7 @@ public class AuthenticationController {
 
 
     @PostMapping("/forgot-password")
+    @Operation(summary = "Mot de passe oublié", description = "Commence la procédure de réinitialisation du mot de passe.")
     public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         try {
             authenticationService.forgotPassword(request);
@@ -118,6 +126,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/reset-password")
+    @Operation(summary = "Réinitialiser le mot de passe", description = "Réinitialise le mot de passe à l'aide du token de réinitialisation.")
     public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         try {
             authenticationService.resetPassword(request);
@@ -134,6 +143,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/change-password")
+    @Operation(summary = "Changer le mot de passe", description = "Modifie le mot de passe de l'utilisateur connecté.")
     public ResponseEntity<?> changePassword(
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody ChangePasswordRequest request
@@ -155,6 +165,7 @@ public class AuthenticationController {
     }
 
     @GetMapping("/current-user")
+    @Operation(summary = "Informations de l'utilisateur connecté", description = "Retourne les informations du profil de l'utilisateur actuellement connecté.")
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal UserDetails userDetails) {
         try {
             User user = (User) userDetails;
@@ -184,6 +195,7 @@ public class AuthenticationController {
     }
 
     @GetMapping("/users")
+    @Operation(summary = "Lister les utilisateurs", description = "Retourne la liste de tous les utilisateurs.")
     public ResponseEntity<?> getAllUsers() {
         try {
             List<User> users = authenticationService.getAllUsers();
@@ -200,6 +212,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/update-user")
+    @Operation(summary = "Mettre à jour l'utilisateur", description = "Met à jour les informations du profil utilisateur.")
     public ResponseEntity<?> updateUser(@AuthenticationPrincipal UserDetails userDetails, @Valid @RequestBody UserDto userDto) {
         try {
             authenticationService.updateUser(userDto);
@@ -218,6 +231,7 @@ public class AuthenticationController {
 
 
     @PostMapping("/logout")
+    @Operation(summary = "Déconnexion", description = "Procède à la déconnexion côté client en supprimant le JWT.")
     public ResponseEntity<?> logout() {
         // Avec JWT, le logout se fait côté client en supprimant le token
         return ResponseEntity.ok(Map.of(
@@ -227,6 +241,7 @@ public class AuthenticationController {
     }
 
     @GetMapping("/validate-token")
+    @Operation(summary = "Valider le token", description = "Vérifie si le token JWT actuel est valide.")
     public ResponseEntity<?> validateToken(Authentication authentication) {
         if (authentication != null && authentication.isAuthenticated()) {
             return ResponseEntity.ok(Map.of(
