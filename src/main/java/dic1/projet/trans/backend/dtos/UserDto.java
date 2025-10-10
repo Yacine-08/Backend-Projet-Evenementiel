@@ -1,6 +1,9 @@
 package dic1.projet.trans.backend.dtos;
 
+import dic1.projet.trans.backend.enums.Role;
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class UserDto {
@@ -11,5 +14,5 @@ public class UserDto {
     private String email;
     private String phoneNumber;
     private String profilePhoto;
-    private String role;
+    private List<String> roles;
 }

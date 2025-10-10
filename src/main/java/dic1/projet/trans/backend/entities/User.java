@@ -12,8 +12,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Data
 @Builder
@@ -25,14 +27,19 @@ public class User implements UserDetails {
     private String idUser;
     private String firstName;
     private String lastName;
-    @Builder.Default
     private String username = null;
     private String email;
     private String phoneNumber;
     private String password;
     private LocalDateTime inscriptionDate;
     private String profilePhoto;
-    private Role role;
+
+    private List<Role> roles = new ArrayList<>();
+    
+    // Méthode utilitaire pour vérifier si l'utilisateur a un rôle spécifique
+    public boolean hasRole(Role role) {
+        return roles.contains(role);
+    }
 
     // false until otp is verified
     private boolean enabled;
@@ -40,7 +47,9 @@ public class User implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority(role.name()));
+        return roles.stream()
+                .map(role -> new SimpleGrantedAuthority(role.name()))
+                .collect(Collectors.toList());
     }
 
     @Override

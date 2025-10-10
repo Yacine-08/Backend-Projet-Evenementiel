@@ -1,11 +1,11 @@
 package dic1.projet.trans.backend.dtos;
 
+import dic1.projet.trans.backend.enums.Role;
 import dic1.projet.trans.backend.validators.EmailOrPhoneRequired;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 @EmailOrPhoneRequired
@@ -27,8 +27,8 @@ public class RegisterRequest implements AuthenticationRequest {
     @Size(min = 8, message = "Le mot de passe doit contenir au moins 8 caractères")
     private String password;
 
-    @NotBlank(message = "Veuillez choisir un profile")
-    private String role;
+    @NotEmpty(message = "Veuillez choisir au moins un profile")
+    private List<Role> roles;
 
     private String profilePicture;
 }

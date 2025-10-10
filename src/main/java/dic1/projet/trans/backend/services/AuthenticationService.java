@@ -2,6 +2,8 @@ package dic1.projet.trans.backend.services;
 
 import dic1.projet.trans.backend.dtos.*;
 import dic1.projet.trans.backend.entities.OtpCode;
+import dic1.projet.trans.backend.enums.Role;
+import java.util.stream.Collectors;
 import dic1.projet.trans.backend.entities.PasswordResetToken;
 import dic1.projet.trans.backend.entities.User;
 import dic1.projet.trans.backend.enums.Role;
@@ -41,32 +43,53 @@ public class AuthenticationService {
     @Transactional
     public AuthenticationResponse register(RegisterRequest request) {
 
-        // verify if the email is already used
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new BadRequestException("Cet email est déjà utilisé");
+        // Vérifier si l'email est fourni AVANT de vérifier s'il existe
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new BadRequestException("Cet email est déjà utilisé");
+            }
         }
 
-        // verify if the phone number is already used
-        if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
-            throw new BadRequestException("Cet numéro de téléphone est déjà utilisé");
+        // Vérifier si le numéro de téléphone est fourni AVANT de vérifier s'il existe
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()) {
+            if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+                throw new BadRequestException("Ce numéro de téléphone est déjà utilisé");
+            }
         }
 
-        // create user
+        // Vérifier qu'au moins un des deux est fourni
+        if ((request.getEmail() == null || request.getEmail().isBlank()) &&
+                (request.getPhoneNumber() == null || request.getPhoneNumber().isBlank())) {
+            throw new BadRequestException("Veuillez fournir un email ou un numéro de téléphone");
+        }
+
+        // Obtenir les rôles depuis la requête
+        List<Role> roles = request.getRoles().stream()
+                .map(role -> Role.valueOf(role.name().toUpperCase()))
+                .collect(Collectors.toList());
+
+        if (roles.isEmpty()) {
+            throw new BadRequestException("Au moins un rôle doit être spécifié");
+        }
+
+        // Créer l'utilisateur
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
+                .username(request.getEmail() != null ? request.getEmail() : request.getPhoneNumber())
                 .email(request.getEmail())
                 .phoneNumber(request.getPhoneNumber())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.valueOf(request.getRole()))
+                .roles(roles)
+                .profilePhoto(request.getProfilePicture())
                 .inscriptionDate(LocalDateTime.now())
-                .enabled(false) // disabled until otp verification
+                .enabled(false) // désactivé jusqu'à la vérification OTP
                 .accountNonLocked(true)
                 .build();
 
         User savedUser = userRepository.save(user);
 
-        // generate otp code and send it to the user
+        // Générer et envoyer le code OTP
         String otpCode = generateOtpCode();
         if (savedUser.getEmail() != null && !savedUser.getEmail().isBlank()) {
             saveOtpCode(savedUser.getEmail(), null, otpCode);
@@ -76,7 +99,7 @@ public class AuthenticationService {
             smsService.sendOtpSms(savedUser.getPhoneNumber(), otpCode);
         }
 
-        // generate token
+        // Générer le token
         String jwtToken = jwtService.generateToken(savedUser);
 
         return AuthenticationResponse.builder()
@@ -316,7 +339,12 @@ public class AuthenticationService {
         dto.setEmail(user.getEmail());
         dto.setPhoneNumber(user.getPhoneNumber());
         dto.setProfilePhoto(user.getProfilePhoto());
-        dto.setRole(user.getRole().name());
+        // Convertir la liste de rôles en une liste de noms de rôles
+        if (user.getRoles() != null) {
+            dto.setRoles(user.getRoles().stream()
+                    .map(Role::name)
+                    .collect(Collectors.toList()));
+        }
         return dto;
     }
 
@@ -333,7 +361,13 @@ public class AuthenticationService {
         user.setEmail(userDto.getEmail());
         user.setPhoneNumber(userDto.getPhoneNumber());
         user.setProfilePhoto(userDto.getProfilePhoto());
-        user.setRole(Role.valueOf(userDto.getRole()));
+        // Clear existing roles and add the new ones
+        user.getRoles().clear();
+        if (userDto.getRoles() != null) {
+            userDto.getRoles().forEach(role -> 
+                user.getRoles().add(Role.valueOf(role.toUpperCase()))
+            );
+        }
         userRepository.save(user);
     }
 }

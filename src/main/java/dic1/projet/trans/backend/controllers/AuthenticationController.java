@@ -3,6 +3,7 @@ package dic1.projet.trans.backend.controllers;
 import dic1.projet.trans.backend.dtos.*;
 import dic1.projet.trans.backend.entities.User;
 import dic1.projet.trans.backend.services.AuthenticationService;
+import dic1.projet.trans.backend.enums.Role;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -165,7 +167,9 @@ public class AuthenticationController {
             userDto.setEmail(user.getEmail());
             userDto.setPhoneNumber(user.getPhoneNumber());
             userDto.setProfilePhoto(user.getProfilePhoto());
-            userDto.setRole(user.getRole().name());
+            userDto.setRoles(user.getRoles().stream()
+                    .map(Role::name)
+                    .collect(Collectors.toList()));
 
             return ResponseEntity.ok(Map.of(
                     "success", true,
