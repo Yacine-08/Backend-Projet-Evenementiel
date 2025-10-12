@@ -19,5 +19,5 @@ public class Notification {
     private String content;
     private LocalDateTime dateEnvoi;
     private NotificationStatus status;
-    private String userId;
+    private User userId;
 }

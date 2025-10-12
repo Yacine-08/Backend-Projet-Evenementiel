@@ -38,11 +38,13 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html",
-                                "/swagger-ui/**"
+                                "/swagger-ui/**",
+                                "/api/auth/**"
                         ).permitAll()
-                        .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
                         .requestMatchers("/api/organizer/**").hasAnyRole("ORGANIZER", "ADMINISTRATOR")
+                        .requestMatchers("/api/favorites/**").authenticated()
+                        .requestMatchers("/api/events/**").hasAnyRole("CLIENT", "ORGANIZER", "ADMINISTRATOR")
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
