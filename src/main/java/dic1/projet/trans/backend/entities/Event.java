@@ -15,6 +15,8 @@ import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -54,8 +56,32 @@ public class Event {
     private LocalDateTime creationDateTime = LocalDateTime.now();
 
     @NotNull(message = "Organizer is required")
+    @DBRef(lazy = true)
     private User organizer;
+
+    // Liste des participants (utilisateurs ayant réservé)
+    @DBRef(lazy = true)
+    private List<User> participants = new ArrayList<>();
+
     private String image;
     private String refundPolicy;
+
+    // Méthodes utilitaires
+    public void addParticipant(User user) {
+        if (participants == null) {
+            participants = new ArrayList<>();
+        }
+        if (!participants.contains(user)) {
+            participants.add(user);
+        }
+    }
+
+    public int getCurrentParticipantCount() {
+        return participants != null ? participants.size() : 0;
+    }
+
+    public boolean isFull() {
+        return getCurrentParticipantCount() >= capacityMaximal;
+    }
 
 }

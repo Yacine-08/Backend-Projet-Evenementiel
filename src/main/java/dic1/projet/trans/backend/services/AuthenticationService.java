@@ -389,5 +389,8 @@ public class AuthenticationService {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
     }
-
+    
+    public java.util.Optional<User> getUserById(String userId) {
+        return userRepository.findById(userId);
+    }
 }

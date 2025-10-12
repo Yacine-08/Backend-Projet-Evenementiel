@@ -1,75 +1,118 @@
 package dic1.projet.trans.backend.controllers;
 
-import dic1.projet.trans.backend.dtos.CreateEventRequest;
+import dic1.projet.trans.backend.dtos.*;
 import dic1.projet.trans.backend.entities.Event;
+import dic1.projet.trans.backend.entities.User;
+import dic1.projet.trans.backend.enums.Role;
+import dic1.projet.trans.backend.services.AuthenticationService;
 import dic1.projet.trans.backend.services.EventService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Controller;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import dic1.projet.trans.backend.dtos.EventSearchRequest;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.ResponseEntity;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.Operation;
-
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/events")
-@Tag(name = "Événements", description = "Endpoints pour créer, lister et gérer les événements")
+@Tag(name = "Events", description = "Gestion des événements")
 public class EventController {
 
     @Autowired
     private EventService eventService;
 
-    // add a new event
-    @PostMapping("/event")
-    @Operation(summary = "Créer un événement", description = "Ajoute un nouvel événement à la plateforme.")
-    public Event createEvent(@RequestBody CreateEventRequest request) {
-        return eventService.createEvent(request);
+    @Autowired
+    private AuthenticationService authenticationService;
+
+    @Operation(summary = "Créer un événement (Organisateur uniquement)")
+    @PostMapping
+    public ResponseEntity<?> createEvent(
+            @Valid @RequestBody EventCreateDTO dto,
+            Authentication authentication) {
+
+        User currentUser = authenticationService.getCurrentUser(authentication);
+
+        if (!currentUser.getRoles().contains(Role.ORGANIZER)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Seuls les organisateurs peuvent créer des événements"));
+        }
+
+        Event event = eventService.createEvent(dto, currentUser);
+        return ResponseEntity.status(HttpStatus.CREATED).body(event);
     }
 
-    // get all events
-    @GetMapping("/allEvents")
-    @Operation(summary = "Lister tous les événements", description = "Retourne l'ensemble des événements disponibles.")
-    public Iterable<Event> getAllEvents() {
-        return eventService.getAllEvents();
+    @Operation(summary = "Mettre à jour un événement")
+    @PutMapping("/{eventId}")
+    public ResponseEntity<?> updateEvent(
+            @PathVariable String eventId,
+            @Valid @RequestBody EventUpdateDTO dto,
+            Authentication authentication) {
+
+        User currentUser = authenticationService.getCurrentUser(authentication);
+
+        try {
+            Event updatedEvent = eventService.updateEvent(eventId, dto, currentUser);
+            return ResponseEntity.ok(updatedEvent);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        }
     }
 
-    // get event by id
-    @GetMapping("/event/{id}")
-    @Operation(summary = "Obtenir un événement par ID", description = "Retourne les détails d'un événement spécifique.")
-    public Optional<Event> getEventById(@PathVariable String id) {
-        return eventService.getEvent(id);
+    @Operation(summary = "Annuler un événement")
+    @PutMapping("/{eventId}/cancel")
+    public ResponseEntity<?> cancelEvent(
+            @PathVariable String eventId,
+            @RequestBody(required = false) Map<String, String> body,
+            Authentication authentication) {
+
+        User currentUser = authenticationService.getCurrentUser(authentication);
+        String reason = body != null ? body.get("reason") : "Non spécifiée";
+
+        try {
+            Event cancelledEvent = eventService.cancelEvent(eventId, currentUser, reason);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Événement annulé avec succès",
+                    "event", cancelledEvent
+            ));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        }
     }
 
-    // update event
-    @PutMapping("/event/{id}")
-    @Operation(summary = "Mettre à jour un événement", description = "Modifie les informations d'un événement existant.")
-    public Event updateEvent(@PathVariable String id, @RequestBody CreateEventRequest request) {
-        return eventService.updateEvent(id, request);
+    @Operation(summary = "Récupérer un événement par ID")
+    @GetMapping("/{eventId}")
+    public ResponseEntity<?> getEvent(@PathVariable String eventId) {
+        try {
+            Event event = eventService.getEventById(eventId);
+            return ResponseEntity.ok(event);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        }
     }
 
-    // delete event
-    @DeleteMapping("/event/{id}")
-    @Operation(summary = "Supprimer un événement", description = "Supprime un événement à partir de son identifiant.")
-    public void deleteEvent(@PathVariable String id) {
-        eventService.deleteEvent(id);
-    }
+    @Operation(summary = "Récupérer mes événements (Organisateur)")
+    @GetMapping("/my-events")
+    public ResponseEntity<?> getMyEvents(Authentication authentication) {
+        User currentUser = authenticationService.getCurrentUser(authentication);
 
-    @GetMapping("/search")
-    @Operation(summary = "Rechercher des événements", description = "Recherche par titre, date, lieu, type et statut.")
-    public List<Event> searchEvents(
-            @RequestParam(required = false, name = "title") String title,
-            @RequestParam(required = false, name = "date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(required = false, name = "location") String location,
-            @RequestParam(required = false, name = "typeEvent") String typeEvent,
-            @RequestParam(required = false, name = "eventStatus") String eventStatus) {
-        
-        List<Event> events = eventService.searchEvents(title, date, location, typeEvent, eventStatus);
-        return events;
+        if (!currentUser.getRoles().contains(Role.ORGANIZER)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Accessible uniquement aux organisateurs"));
+        }
+
+        return ResponseEntity.ok(eventService.getEventsByOrganizer(currentUser.getIdUser()));
     }
 }

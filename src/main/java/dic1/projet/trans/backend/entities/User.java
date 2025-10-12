@@ -1,10 +1,7 @@
 package dic1.projet.trans.backend.entities;
 
 import dic1.projet.trans.backend.enums.Role;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -18,17 +15,21 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "users")
+@ToString(exclude = {"favoriteEvents"})
+@EqualsAndHashCode(exclude = {"favoriteEvents"})
 public class User implements UserDetails {
     @Id
     private String idUser;
+
     private String firstName;
     private String lastName;
-    private String username = null;
+    private String username;
     private String email;
     private String phoneNumber;
     private String password;
@@ -37,14 +38,14 @@ public class User implements UserDetails {
 
     private List<Role> roles = new ArrayList<>();
 
+    @DBRef(lazy = true)
     private List<Event> favoriteEvents = new ArrayList<>();
 
 
     public boolean hasRole(Role role) {
-        return roles.contains(role);
+        return roles != null && roles.contains(role);
     }
 
-    // false until otp is verified
     private boolean enabled;
     private boolean accountNonLocked;
 
@@ -75,6 +76,7 @@ public class User implements UserDetails {
         return enabled;
     }
 
+    // Méthodes pour gérer les favoris
     public void addFavorite(Event event) {
         if (favoriteEvents == null) {
             favoriteEvents = new ArrayList<>();

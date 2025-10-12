@@ -22,12 +22,22 @@ public interface EventRepository extends MongoRepository<Event, String> {
     @Query("{'typeEvent': {$regex: ?0, $options: 'i'}}")
     List<Event> findByTypeEvent(String typeEvent);
 
-    // search by date
-    List<Event> findByDateTimeStartBetween(LocalDateTime startDate, LocalDateTime endDate);
     
     // search by event status
     @Query("{'eventStatus': {$regex: ?0, $options: 'i'}}")
     List<Event> findByEventStatus(EventStatus eventStatus);
 
+    /**
+     * Trouve les événements dont la date de début est dans la plage spécifiée
+     */
+    List<Event> findByDateTimeStartBetween(LocalDateTime start, LocalDateTime end);
+
+    /**
+     * Trouve les événements actifs (non annulés) dans une plage de dates
+     */
+    @Query("{ 'dateTimeStart': { $gte: ?0, $lt: ?1 }, 'eventStatus': { $ne: 'CANCELLED' } }")
+    List<Event> findActiveEventsBetween(LocalDateTime start, LocalDateTime end);
+
+    List<Event> findByOrganizerIdUser(String organizerId);
 
 }
