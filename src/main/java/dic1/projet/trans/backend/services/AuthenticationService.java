@@ -3,6 +3,8 @@ package dic1.projet.trans.backend.services;
 import dic1.projet.trans.backend.dtos.*;
 import dic1.projet.trans.backend.entities.OtpCode;
 import dic1.projet.trans.backend.enums.Role;
+
+import java.util.Optional;
 import java.util.stream.Collectors;
 import dic1.projet.trans.backend.entities.PasswordResetToken;
 import dic1.projet.trans.backend.entities.User;
@@ -12,10 +14,11 @@ import dic1.projet.trans.backend.exceptions.BadRequestException;
 import dic1.projet.trans.backend.repositories.OtpCodeRepository;
 import dic1.projet.trans.backend.repositories.PasswordResetTokenRepository;
 import dic1.projet.trans.backend.repositories.UserRepository;
-
+import dic1.projet.trans.backend.utils.PhoneNumberUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -42,6 +45,7 @@ public class AuthenticationService {
     private final EmailService emailService;
     private final SmsService smsService;
 
+
     @Transactional
     public AuthenticationResponse register(RegisterRequest request) {
 
@@ -64,6 +68,14 @@ public class AuthenticationService {
                 (request.getPhoneNumber() == null || request.getPhoneNumber().isBlank())) {
             throw new BadRequestException("Veuillez fournir un email ou un numéro de téléphone");
         }
+        
+        // Vérifier si le nom d'utilisateur est déjà utilisé
+        if((request.getUsername() != null || !request.getUsername().isBlank())) {
+            if (userRepository.existsByUsername(request.getUsername())) {
+                throw new BadRequestException("Ce nom d'utilisateur est déjà utilisé");
+            }
+        }
+
 
         // Obtenir les rôles depuis la requête
         List<Role> roles = request.getRoles().stream()
@@ -78,7 +90,7 @@ public class AuthenticationService {
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
-                .username(request.getEmail() != null ? request.getEmail() : request.getPhoneNumber())
+                .username(request.getUsername())
                 .email(request.getEmail())
                 .phoneNumber(request.getPhoneNumber())
                 .password(passwordEncoder.encode(request.getPassword()))
@@ -106,53 +118,72 @@ public class AuthenticationService {
 
         return AuthenticationResponse.builder()
                 .token(jwtToken)
-                .user(mapToUserDto(savedUser))
                 .build();
     }
 
     public AuthenticationResponse login(LoginRequest request) {
-        User user;
-
-        if (request.getEmail() != null && !request.getEmail().isBlank()) {
-            user = userRepository.findByEmail(request.getEmail())
-                    .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé avec cet email"));
-        } else if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()) {
-            user = userRepository.findByPhoneNumber(request.getPhoneNumber())
-                    .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé avec ce numéro"));
-        } else {
+        // Vérifier qu'un seul identifiant est fourni
+        boolean hasEmail = request.getEmail() != null && !request.getEmail().isBlank();
+        boolean hasPhone = request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank();
+        
+        if (hasEmail && hasPhone) {
+            throw new BadRequestException("Veuillez fournir soit un email, soit un numéro de téléphone, mais pas les deux");
+        }
+        if (!hasEmail && !hasPhone) {
             throw new BadRequestException("Veuillez fournir un email ou un numéro de téléphone");
         }
 
-        // check if the account is verified
-        if (!user.isEnabled()) {
-            throw new BadRequestException("Compte non vérifié. Veuillez vérifier votre email ou votre téléphone.");
-        }
+        try {
+            User user;
+            String identifier;
+            
+            if (hasEmail) {
+                // Connexion par email
+                user = userRepository.findByEmail(request.getEmail())
+                        .orElseThrow(() -> new UsernameNotFoundException("Aucun compte trouvé avec cet email"));
+                identifier = request.getEmail();
+            } else {
+                // Connexion par téléphone - on utilise la même normalisation que dans CustomUserDetailsService
+                String normalizedPhoneNumber = PhoneNumberUtils.normalizePhoneNumber(request.getPhoneNumber());
+                user = userRepository.findByPhoneNumber(normalizedPhoneNumber)
+                        .orElseThrow(() -> new UsernameNotFoundException("Aucun compte trouvé avec ce numéro de téléphone"));
+                identifier = user.getPhoneNumber(); // On utilise le numéro tel qu'il est stocké en base
+            }
 
-        // authenticate user using email or phone number as username
-        String username = request.getEmail() != null ? 
-                request.getEmail() : request.getPhoneNumber();
-                
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        username,
+            // Vérifier si le compte est vérifié
+            if (!user.isEnabled()) {
+                throw new BadRequestException("Compte non vérifié. Veuillez vérifier votre email ou votre téléphone.");
+            }
+
+            // Authentifier l'utilisateur
+            try {
+                authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                        identifier,
                         request.getPassword()
-                )
-        );
+                    )
+                );
+            } catch (BadCredentialsException e) {
+                throw new BadCredentialsException("Mot de passe incorrect");
+            }
 
-        // generate token
-        String jwtToken = jwtService.generateToken(user);
 
-        return AuthenticationResponse.builder()
-                .token(jwtToken)
-                .user(mapToUserDto(user))
-                .build();
+            return AuthenticationResponse.builder()
+                    .user(mapToUserDto(user))
+                    .build();
+
+        } catch (BadCredentialsException e) {
+            throw new BadCredentialsException("Identifiants invalides");
+        } catch (Exception e) {
+            throw new RuntimeException("Erreur lors de l'authentification", e);
+        }
     }
 
 
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request) {
         User user;
-        
+
         if (request.getEmail() != null && !request.getEmail().isBlank()) {
             user = userRepository.findByEmail(request.getEmail())
                     .orElseThrow(() -> new ResourceNotFoundException("Aucun compte avec cet email"));
@@ -216,6 +247,7 @@ public class AuthenticationService {
     @Transactional
     public void generateOtp(String email, String phoneNumber) {
         User user;
+        String normalizedPhoneNumber = null;
 
         if (email != null && !email.isBlank()) {
             user = userRepository.findByEmail(email)
@@ -223,10 +255,13 @@ public class AuthenticationService {
 
             otpCodeRepository.deleteByEmail(email);
         } else if (phoneNumber != null && !phoneNumber.isBlank()) {
-            user = userRepository.findByPhoneNumber(phoneNumber)
+            // Normaliser le numéro de téléphone
+            normalizedPhoneNumber = PhoneNumberUtils.normalizePhoneNumber(phoneNumber);
+            
+            user = userRepository.findByPhoneNumber(normalizedPhoneNumber)
                     .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé avec ce numéro"));
 
-            otpCodeRepository.deleteByPhoneNumber(phoneNumber);
+            otpCodeRepository.deleteByPhoneNumber(normalizedPhoneNumber);
         } else {
             throw new BadRequestException("Email ou numéro de téléphone requis");
         }
@@ -236,7 +271,7 @@ public class AuthenticationService {
         // Sauvegarder le code OTP
         OtpCode otpCode = OtpCode.builder()
                 .email(email)
-                .phoneNumber(phoneNumber)
+                .phoneNumber(normalizedPhoneNumber)
                 .code(otp)
                 .expiryDate(LocalDateTime.now().plusMinutes(10))
                 .verified(false)
@@ -354,23 +389,31 @@ public class AuthenticationService {
         return userRepository.findAll();
     }
 
-    public void updateUser(@Valid UserDto userDto) {
-        User user = userRepository.findById(userDto.getIdUser())
+    @Transactional
+    public User updateUser(User user) {
+        // Vérifier que l'utilisateur existe
+        User existingUser = userRepository.findById(user.getIdUser())
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé"));
-        user.setFirstName(userDto.getFirstName());
-        user.setLastName(userDto.getLastName());
-        user.setUsername(userDto.getUsername());
-        user.setEmail(userDto.getEmail());
-        user.setPhoneNumber(userDto.getPhoneNumber());
-        user.setProfilePhoto(userDto.getProfilePhoto());
-        // Clear existing roles and add the new ones
-        user.getRoles().clear();
-        if (userDto.getRoles() != null) {
-            userDto.getRoles().forEach(role -> 
-                user.getRoles().add(Role.valueOf(role.toUpperCase()))
-            );
+
+        
+        // Mettre à jour uniquement les champs non nuls
+        if (user.getFirstName() != null) {
+            existingUser.setFirstName(user.getFirstName());
         }
-        userRepository.save(user);
+        if (user.getLastName() != null) {
+            existingUser.setLastName(user.getLastName());
+        }
+        if (user.getPhoneNumber() != null) {
+            existingUser.setPhoneNumber(user.getPhoneNumber());
+        }
+        if (user.getUsername() != null) {
+            existingUser.setUsername(user.getUsername());
+        }
+        if (user.getProfilePhoto() != null) {
+            existingUser.setProfilePhoto(user.getProfilePhoto());
+        }
+        
+        return userRepository.save(existingUser);
     }
 
     public User getCurrentUser(Authentication authentication) {
@@ -393,4 +436,17 @@ public class AuthenticationService {
     public java.util.Optional<User> getUserById(String userId) {
         return userRepository.findById(userId);
     }
+
+    public Optional<User> findByUsername(String username) {
+        return userRepository.findByUsername(username);
+    }
+    
+    public Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email);
+    }
+
+    public Optional<User> findByPhoneNumber(String phone) {
+        return userRepository.findByPhoneNumber(phone);
+    }
+
 }

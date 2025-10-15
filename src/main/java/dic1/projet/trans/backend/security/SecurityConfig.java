@@ -1,5 +1,6 @@
 package dic1.projet.trans.backend.security;
 
+import dic1.projet.trans.backend.entities.User;
 import dic1.projet.trans.backend.repositories.UserRepository;
 import dic1.projet.trans.backend.services.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import java.util.Optional;
 
 @Configuration
 @EnableWebSecurity
@@ -41,6 +44,7 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/api/auth/**"
                         ).permitAll()
+                        .requestMatchers("/current-user").authenticated()
                         .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
                         .requestMatchers("/api/organizer/**").hasAnyRole("ORGANIZER", "ADMINISTRATOR")
                         .requestMatchers("/api/favorites/**").authenticated()
@@ -73,18 +77,49 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
-
+    
     @Bean
     public UserDetailsService userDetailsService() {
-        return username -> userRepository.findByEmail(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
+        return username -> {
+            Optional<User> userByUsername = userRepository.findByUsername(username);
+            if (userByUsername.isPresent()) {
+                return userByUsername.get();
+            }
+
+            if (username.contains("@")) {
+                return userRepository.findByEmail(username)
+                        .orElseThrow(() -> new UsernameNotFoundException("Aucun compte trouvé avec cet email: " + username));
+            }
+
+            if (username.matches(".*\\d.*")) { // Si la chaîne contient des chiffres
+                // Essayer différents formats de numéro de téléphone
+                String[] possibleFormats = {
+                    username, // Format original
+                    username.replaceAll("\\s+", ""), // Sans espaces
+                    username.replaceAll("\\D+", ""), // Uniquement les chiffres
+                    username.replaceAll("^\\+221", "").replaceAll("\\s+", ""), // Sans +221 et sans espaces
+                    "221" + username.replaceAll("\\D+", ""), // Avec préfixe 221
+                    "+" + username.replaceAll("\\D+", ""), // Avec préfixe +
+                    "221" + username // Format simple avec 221
+                };
+
+                for (String phoneNumber : possibleFormats) {
+                    if (phoneNumber == null || phoneNumber.trim().isEmpty()) continue;
+                    
+                    Optional<User> userOpt = userRepository.findByPhoneNumber(phoneNumber);
+                    if (userOpt.isPresent()) {
+                        return userOpt.get();
+                    }
+                }
+            }
+
+            throw new UsernameNotFoundException("Aucun compte trouvé avec cet identifiant: " + username);
+        };
     }
     
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService);
-        filter.setUserDetailsService(userDetailsService());
-        return filter;
+        return new JwtAuthenticationFilter(jwtService);
     }
     
 }

@@ -4,19 +4,24 @@ import dic1.projet.trans.backend.dtos.*;
 import dic1.projet.trans.backend.entities.User;
 import dic1.projet.trans.backend.services.AuthenticationService;
 import dic1.projet.trans.backend.enums.Role;
+import dic1.projet.trans.backend.utils.PhoneNumberUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -169,7 +174,7 @@ public class AuthenticationController {
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal UserDetails userDetails) {
         try {
             User user = (User) userDetails;
-            
+
             UserDto userDto = new UserDto();
             userDto.setIdUser(user.getIdUser());
             userDto.setFirstName(user.getFirstName());
@@ -211,16 +216,97 @@ public class AuthenticationController {
         }
     }
 
-    @PostMapping("/update-user")
-    @Operation(summary = "Mettre à jour l'utilisateur", description = "Met à jour les informations du profil utilisateur.")
-    public ResponseEntity<?> updateUser(@AuthenticationPrincipal UserDetails userDetails, @Valid @RequestBody UserDto userDto) {
+    @PutMapping("/update-user")
+    @Operation(summary = "Mettre à jour l'utilisateur", description = "Met à jour les informations du profil utilisateur connecté. Seuls les champs fournis seront mis à jour.")
+    public ResponseEntity<?> updateUser(
+            Authentication authentication,
+            @RequestBody Map<String, Object> updates) {
+
         try {
-            authenticationService.updateUser(userDto);
+            // Récupérer l'utilisateur connecté
+            String currentUsername = authentication.getName();
+            
+            // Trouver l'utilisateur par son nom d'utilisateur (username)
+            User currentUser = authenticationService.findByUsername(currentUsername)
+                    .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé avec le nom d'utilisateur: " + currentUsername));
+            
+            // Mettre à jour uniquement les champs fournis
+            if (updates.containsKey("firstName") && updates.get("firstName") != null) {
+                currentUser.setFirstName((String) updates.get("firstName"));
+            }
+
+            if (updates.containsKey("lastName") && updates.get("lastName") != null) {
+                currentUser.setLastName((String) updates.get("lastName"));
+            }
+
+            if (updates.containsKey("email") && updates.get("email") != null) {
+                String newEmail = (String) updates.get("email");
+                // Vérifier si l'email est déjà utilisé par un autre utilisateur
+                if (!newEmail.equals(currentUser.getEmail()) && 
+                    authenticationService.findByEmail(newEmail).isPresent()) {
+                    throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Cet email est déjà utilisé"
+                    );
+                }
+                currentUser.setEmail(newEmail);
+            }
+
+            if (updates.containsKey("phoneNumber") && updates.get("phoneNumber") != null) {
+                String newNum = (String) updates.get("phoneNumber");
+                String formattedPhoneNumber;
+                try {
+                    formattedPhoneNumber = PhoneNumberUtils.normalizePhoneNumber(newNum);
+                } catch (IllegalArgumentException e) {
+                    throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        e.getMessage()
+                    );
+                }
+                
+                // Vérifier si le numéro est déjà utilisé par un autre utilisateur
+                if (!formattedPhoneNumber.equals(currentUser.getPhoneNumber()) &&
+                        authenticationService.findByPhoneNumber(formattedPhoneNumber).isPresent()) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Ce numéro est déjà utilisé"
+                    );
+                }
+                currentUser.setPhoneNumber(formattedPhoneNumber);
+            }
+
+            if (updates.containsKey("username") && updates.get("username") != null) {
+                String newUsername = (String) updates.get("username");
+                // Vérifier si le nom est déjà utilisé par un autre utilisateur
+                if (!newUsername.equals(currentUser.getUsername()) &&
+                        authenticationService.findByUsername(newUsername).isPresent()) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Ce nom d'utilisateur est déjà utilisé"
+                    );
+                }
+                currentUser.setUsername((String) updates.get("newUsername"));
+            }
+
+            if (updates.containsKey("profilePhoto") && updates.get("profilePhoto") != null) {
+                currentUser.setEmail((String) updates.get("profilePhoto"));
+            }
+
+            if (updates.containsKey("roles") && updates.get("roles") != null) {
+                currentUser.setEmail((String) updates.get("roles"));
+            }
+
+            
+            // Sauvegarder les modifications
+            User updatedUser = authenticationService.updateUser(currentUser);
+            
             return ResponseEntity.ok(Map.of(
                     "success", true,
-                    "message", "Utilisateur mis à jour avec succès"
+                    "message", "Profil mis à jour avec succès",
+                    "user", updatedUser
             ));
-        }catch (Exception e) {
+            
+        } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", e.getMessage()

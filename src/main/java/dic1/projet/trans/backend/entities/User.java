@@ -29,9 +29,16 @@ public class User implements UserDetails {
 
     private String firstName;
     private String lastName;
+    
+    @org.springframework.data.mongodb.core.index.Indexed(unique = true)
     private String username;
+    
+    @org.springframework.data.mongodb.core.index.Indexed(unique = true, sparse = true)
     private String email;
+    
+    @org.springframework.data.mongodb.core.index.Indexed(unique = true, sparse = true)
     private String phoneNumber;
+
     private String password;
     private LocalDateTime inscriptionDate;
     private String profilePhoto;

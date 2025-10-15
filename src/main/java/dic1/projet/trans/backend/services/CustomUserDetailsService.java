@@ -7,6 +7,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import dic1.projet.trans.backend.utils.PhoneNumberUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -21,7 +22,9 @@ public class CustomUserDetailsService {
                     .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé avec le mail: " + email));
         }
         else if(phoneNumber != null) {
-            return userRepository.findByPhoneNumber(phoneNumber)
+            // Normaliser le numéro de téléphone avant la recherche
+            String normalizedPhoneNumber = PhoneNumberUtils.normalizePhoneNumber(phoneNumber);
+            return userRepository.findByPhoneNumber(normalizedPhoneNumber)
                     .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé avec le numéro de téléphone: " + phoneNumber));
         }
         else {

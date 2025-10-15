@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import dic1.projet.trans.backend.utils.PhoneNumberUtils;
 
 @Data
 @EmailOrPhoneRequired
@@ -13,9 +14,15 @@ public class LoginRequest implements AuthenticationRequest {
     @Email(message = "Email invalide")
     private String email;
 
-    @Size(min = 9, message = "Le numéro de téléphone doit contenir au moins 9 chiffres")
-    @Pattern(regexp = "^[0-9+().\\s-]*$", message = "Numéro de téléphone invalide")
     private String phoneNumber;
+    
+    public void setPhoneNumber(String phoneNumber) {
+        if (phoneNumber != null && !phoneNumber.trim().isEmpty()) {
+            this.phoneNumber = PhoneNumberUtils.normalizePhoneNumber(phoneNumber);
+        } else {
+            this.phoneNumber = null;
+        }
+    }
 
     @NotBlank(message = "Le mot de passe est obligatoire")
     private String password;

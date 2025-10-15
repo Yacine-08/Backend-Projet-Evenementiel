@@ -10,11 +10,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -29,7 +32,7 @@ public class EventController {
     private AuthenticationService authenticationService;
 
     @Operation(summary = "Créer un événement (Organisateur uniquement)")
-    @PostMapping
+    @PostMapping("/create")
     public ResponseEntity<?> createEvent(
             @Valid @RequestBody EventCreateDTO dto,
             Authentication authentication) {
@@ -103,7 +106,7 @@ public class EventController {
         }
     }
 
-    @Operation(summary = "Récupérer mes événements (Organisateur)")
+    @Operation(summary = "Récupérer les événements (Organisateur)")
     @GetMapping("/my-events")
     public ResponseEntity<?> getMyEvents(Authentication authentication) {
         User currentUser = authenticationService.getCurrentUser(authentication);
@@ -114,5 +117,22 @@ public class EventController {
         }
 
         return ResponseEntity.ok(eventService.getEventsByOrganizer(currentUser.getIdUser()));
+    }
+
+    @GetMapping("/events")
+    public ResponseEntity<List<Event>> getAllEvents() {
+        return ResponseEntity.ok(eventService.getAllEvents());
+    }
+
+    @GetMapping("/search")
+    public List<Event> searchEvents(
+            @RequestParam(required = false, name = "title") String title,
+            @RequestParam(required = false, name = "date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false, name = "location") String location,
+            @RequestParam(required = false, name = "typeEvent") String typeEvent,
+            @RequestParam(required = false, name = "eventStatus") String eventStatus) {
+
+        List<Event> events = eventService.searchEvents(title, date, location, typeEvent, eventStatus);
+        return events;
     }
 }
