@@ -41,7 +41,7 @@ public class EventController {
 
         if (!currentUser.getRoles().contains(Role.ORGANIZER)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Seuls les organisateurs peuvent créer des événements"));
+                    .body(Map.of("error", "Seuls lesc organisateurs peuvent créer des événements"));
         }
 
         Event event = eventService.createEvent(dto, currentUser);
@@ -135,4 +135,5 @@ public class EventController {
         List<Event> events = eventService.searchEvents(title, date, location, typeEvent, eventStatus);
         return events;
     }
+
 }

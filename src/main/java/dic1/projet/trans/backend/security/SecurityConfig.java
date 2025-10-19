@@ -44,6 +44,13 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/api/auth/**"
                         ).permitAll()
+                        // Autoriser l'accès public aux endpoints
+                        .requestMatchers(
+                                "/api/events/search",
+                                "/api/events/search/**",
+                                "/api/events/{eventId}",
+                                "/api/events/events"
+                        ).permitAll()
                         .requestMatchers("/current-user").authenticated()
                         .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
                         .requestMatchers("/api/organizer/**").hasAnyRole("ORGANIZER", "ADMINISTRATOR")
