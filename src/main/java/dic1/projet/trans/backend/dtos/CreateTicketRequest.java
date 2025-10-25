@@ -10,6 +10,8 @@ public class CreateTicketRequest {
     @NotBlank(message = "Le type de billet est requis")
     private String ticketType;
 
+    private String description;
+
     @DecimalMin(value = "0.0", inclusive = false, message = "Le prix doit être > 0")
     private double price;
 

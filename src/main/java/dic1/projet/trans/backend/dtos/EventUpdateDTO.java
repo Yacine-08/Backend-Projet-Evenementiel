@@ -2,6 +2,7 @@ package dic1.projet.trans.backend.dtos;
 
 import dic1.projet.trans.backend.entities.Event;
 import dic1.projet.trans.backend.enums.EventStatus;
+import dic1.projet.trans.backend.enums.EventType;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
@@ -19,7 +20,7 @@ public class EventUpdateDTO {
     private LocalDateTime dateTimeStart;
     
     private LocalDateTime dateTimeEnd;
-    private String typeEvent;
+    private EventType typeEvent;
     private EventStatus eventStatus;
     
     @Min(value = 1, message = "Capacity must be at least 1")

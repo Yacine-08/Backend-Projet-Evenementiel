@@ -8,12 +8,14 @@ import dic1.projet.trans.backend.entities.User;
 import dic1.projet.trans.backend.enums.Role;
 import dic1.projet.trans.backend.exceptions.BadRequestException;
 import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
+import dic1.projet.trans.backend.exceptions.ValidationException;
 import dic1.projet.trans.backend.repositories.EventRepository;
 import dic1.projet.trans.backend.repositories.TicketRepository;
 import dic1.projet.trans.backend.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -24,6 +26,7 @@ public class TicketService {
     private final TicketRepository ticketRepository;
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
+    private final TicketValidationService ticketValidationService;
 
     public Ticket createTicket(String userId, String eventId, CreateTicketRequest request) {
         Event event = eventRepository.findById(eventId)
@@ -47,6 +50,13 @@ public class TicketService {
         ticket.setInitialQuantity(request.getInitialQuantity());
         ticket.setSoldQuantity(0);
         ticket.setEventId(eventId);
+        
+        // Valider le ticket en fonction du type d'événement
+        try {
+            ticketValidationService.validateTicket(ticket);
+        } catch (ValidationException e) {
+            throw new BadRequestException(e.getMessage());
+        }
 
         return ticketRepository.save(ticket);
     }

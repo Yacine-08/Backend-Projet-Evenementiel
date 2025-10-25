@@ -1,6 +1,7 @@
 package dic1.projet.trans.backend.dtos;
 
 import dic1.projet.trans.backend.enums.EventStatus;
+import dic1.projet.trans.backend.enums.EventType;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
@@ -14,6 +15,9 @@ public class EventCreateDTO {
     
     @NotBlank(message = "La description est obligatoire")
     private String description;
+
+    @NotBlank(message = "La catégorie est obligatoire")
+    private String category;
     
     @NotBlank(message = "Le lieu est obligatoire")
     private String location;
@@ -26,7 +30,7 @@ public class EventCreateDTO {
     private LocalDateTime dateTimeEnd;
     
     @NotBlank(message = "Le type d'événement est obligatoire")
-    private String typeEvent;
+    private EventType typeEvent;
     
     @NotNull(message = "Le statut est obligatoire")
     private EventStatus eventStatus;
@@ -36,5 +40,6 @@ public class EventCreateDTO {
     private Integer capacityMaximal;
     
     private String image;
+
     private String refundPolicy;
 }

@@ -1,10 +1,8 @@
 package dic1.projet.trans.backend.entities;
 
 import dic1.projet.trans.backend.enums.EventStatus;
-import jakarta.validation.constraints.Future;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import dic1.projet.trans.backend.enums.EventType;
+import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -34,6 +32,9 @@ public class Event {
     @NotBlank(message = "Description is required")
     private String description;
 
+    @NotBlank(message = "Event's category is required")
+    private String category;
+
     @NotBlank(message = "Location is required")
     private String location;
 
@@ -45,7 +46,7 @@ public class Event {
     private LocalDateTime dateTimeEnd;
 
     @NotBlank(message = "Type event is required")
-    private String typeEvent;
+    private EventType typeEvent;
 
     @NotNull(message = "Event status is required")
     private EventStatus eventStatus;
@@ -64,7 +65,25 @@ public class Event {
     private List<User> participants = new ArrayList<>();
 
     private String image;
+
+    @AssertTrue(message = "Si le remboursement est activé, le délai doit être spécifié")
+    private boolean isRefundConfigValid() {
+        if (!refundEnabled) {
+            return true; // Pas de validation nécessaire si le remboursement est désactivé
+        }
+        return refundDeadlineDays != null && refundDeadlineDays >= 0 && 
+               refundConditions != null && !refundConditions.trim().isEmpty();
+    }
+    
     private String refundPolicy;
+    
+    private boolean refundEnabled = false;
+    
+    @Min(value = 0, message = "Le délai de remboursement ne peut pas être négatif")
+    private Integer refundDeadlineDays;
+    
+    @NotBlank(message = "Les conditions de remboursement sont requises")
+    private String refundConditions;
 
     // Méthodes utilitaires
     public void addParticipant(User user) {
@@ -82,6 +101,23 @@ public class Event {
 
     public boolean isFull() {
         return getCurrentParticipantCount() >= capacityMaximal;
+    }
+    
+    public boolean isPaidEvent() {
+        return EventType.PAID.equals(this.typeEvent);
+    }
+    
+    public boolean isRefundAllowed() {
+        if (!refundEnabled) {
+            return false;
+        }
+        
+        if (refundDeadlineDays == null || refundDeadlineDays < 0) {
+            return false;
+        }
+        
+        LocalDateTime refundDeadline = dateTimeStart.minusDays(refundDeadlineDays);
+        return LocalDateTime.now().isBefore(refundDeadline);
     }
 
 }
