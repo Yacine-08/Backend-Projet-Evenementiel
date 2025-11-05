@@ -47,7 +47,7 @@ public class Event {
     @NotNull(message = "End date is required")
     private LocalDateTime dateTimeEnd;
 
-    @NotBlank(message = "Type event is required")
+    @NotNull(message = "Type event is required")
     private EventType typeEvent;
 
     @NotNull(message = "Event status is required")
@@ -83,8 +83,7 @@ public class Event {
     
     @Min(value = 0, message = "Le délai de remboursement ne peut pas être négatif")
     private Integer refundDeadlineDays;
-    
-    @NotBlank(message = "Les conditions de remboursement sont requises")
+
     private String refundConditions;
 
     // Méthodes utilitaires
