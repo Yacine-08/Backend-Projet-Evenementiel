@@ -42,4 +42,8 @@ public class EventCreateDTO {
     private String image;
 
     private String refundPolicy;
+    
+    public boolean isRefundable() {
+        return refundPolicy != null && !refundPolicy.trim().isEmpty();
+    }
 }

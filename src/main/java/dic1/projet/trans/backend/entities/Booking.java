@@ -22,7 +22,7 @@ public class Booking {
     private String paymentMethod;
     private BookingStatus bookingStatus;
     private String clientId;
-    
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
