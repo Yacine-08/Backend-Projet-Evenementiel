@@ -425,16 +425,21 @@ public class AuthenticationService {
             throw new SecurityException("User not authenticated");
         }
 
-        String email;
+        String username;
 
         if (authentication.getPrincipal() instanceof UserDetails) {
-            email = ((UserDetails) authentication.getPrincipal()).getUsername();
+            username = ((UserDetails) authentication.getPrincipal()).getUsername();
         } else {
-            email = authentication.getName();
+            username = authentication.getName();
         }
 
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+        // D'abord essayer de trouver par nom d'utilisateur
+        return userRepository.findByUsername(username)
+                .orElseGet(() -> {
+                    // Si non trouvé, essayer par email (pour la rétrocompatibilité)
+                    return userRepository.findByEmail(username)
+                            .orElseThrow(() -> new UsernameNotFoundException("User not found with username/email: " + username));
+                });
     }
     
     public java.util.Optional<User> getUserById(String userId) {

@@ -14,6 +14,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -43,32 +44,57 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        // Swagger UI & OpenAPI docs should be accessible
-                        .requestMatchers(
-                                "/v3/api-docs/**",
-                                "/swagger-ui.html",
-                                "/swagger-ui/**",
-                                "/api/auth/**"
-                        ).permitAll()
-                        // Autoriser l'accès public aux endpoints
-                        .requestMatchers(
-                                "/api/events/search",
-                                "/api/events/search/**",
-                                "/api/events/{eventId}",
-                                "/api/events/events"
-                        ).permitAll()
-                        .requestMatchers("/current-user").authenticated()
-                        .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
-                        .requestMatchers("/api/organizer/**").hasAnyRole("ORGANIZER", "ADMINISTRATOR")
-                        .requestMatchers("/api/favorites/**").authenticated()
-                        .requestMatchers("/api/events/**").hasAnyRole("CLIENT", "ORGANIZER", "ADMINISTRATOR")
-                        .anyRequest().authenticated()
-                )
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
-                .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                    // Swagger UI & OpenAPI docs
+                    .requestMatchers(
+                            "/v3/api-docs/**",
+                            "/swagger-ui.html",
+                            "/swagger-ui/**",
+                            "/swagger-resources/**",
+                            "/webjars/**"
+                    ).permitAll()
+
+                    // Points d'entrée d'authentification
+                    .requestMatchers(
+                            "/api/auth/**"
+                    ).permitAll()
+
+                    // Points d'entrée publics
+                    .requestMatchers(
+                            "/api/events/search",
+                            "/api/events/search/**",
+                            "/api/events/{eventId}",
+                            "/api/events/events"
+                    ).permitAll()
+
+                    // Points d'entrée nécessitant une authentification
+                    .requestMatchers("/current-user").authenticated()
+
+                    // Points d'entrée administratifs
+                    .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
+
+                    // Points d'entrée organisateur
+                    .requestMatchers("/api/organizer/**").hasAnyRole("ORGANIZER", "ADMINISTRATOR")
+
+                    // Points d'entrée authentifiés
+                    .requestMatchers(
+                            "/api/favorites/**",
+                            "/api/notifications/**"
+                    ).authenticated()
+
+                    // Gestion des événements
+                    .requestMatchers("/api/events/**").hasAnyRole("CLIENT", "ORGANIZER", "ADMINISTRATOR")
+
+                    // Toutes les autres requêtes nécessitent une authentification
+                    .anyRequest().authenticated()
+            )
+            // Configuration de la gestion de session
+            .sessionManagement(session -> session
+                    .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            // Ajout du filtre JWT avant le filtre d'authentification par nom d'utilisateur/mot de passe
+            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -76,12 +102,32 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Autoriser l'envoi des cookies/credentials, tout en utilisant des motifs d'origine
+        // Autoriser l'envoi des cookies/credentials
         config.setAllowCredentials(true);
+        // Autoriser toutes les origines (à restreindre en production)
         config.setAllowedOriginPatterns(List.of("*"));
-        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
-        config.setExposedHeaders(Arrays.asList("Authorization", "Content-Disposition"));
+        // Autoriser les méthodes HTTP nécessaires
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        // Autoriser les en-têtes nécessaires
+        config.setAllowedHeaders(List.of(
+            "Authorization", 
+            "Content-Type", 
+            "X-Requested-With", 
+            "Accept", 
+            "Origin",
+            "Access-Control-Allow-Headers",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers"
+        ));
+        // Exposer les en-têtes personnalisés
+        config.setExposedHeaders(List.of(
+            "Authorization", 
+            "Content-Disposition",
+            "Access-Control-Allow-Origin",
+            "Access-Control-Allow-Credentials"
+        ));
+        // Durée de vie de la configuration CORS en secondes (1 heure)
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
@@ -144,10 +190,12 @@ public class SecurityConfig {
             throw new UsernameNotFoundException("Aucun compte trouvé avec cet identifiant: " + username);
         };
     }
-    
+
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        return new JwtAuthenticationFilter(jwtService);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService);
+        filter.setUserDetailsService(userDetailsService());
+        return filter;
     }
     
 }

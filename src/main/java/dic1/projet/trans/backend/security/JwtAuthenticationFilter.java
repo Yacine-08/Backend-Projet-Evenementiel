@@ -14,20 +14,17 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import lombok.RequiredArgsConstructor;
 
 import java.io.IOException;
 
 @Component
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private UserDetailsService userDetailsService;
-
-    public JwtAuthenticationFilter(JwtService jwtService) {
-        this.jwtService = jwtService;
-    }
-
-    @Autowired
+    
     public void setUserDetailsService(UserDetailsService userDetailsService) {
         this.userDetailsService = userDetailsService;
     }
@@ -38,36 +35,58 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-        final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String username;
+        try {
+            final String authHeader = request.getHeader("Authorization");
+            final String jwt;
+            final String username;
 
-        // Verify if the header Authorization exists and starts with "Bearer"
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // extract token
-        jwt = authHeader.substring(7);
-        username = jwtService.extractUsername(jwt);
-
-        // if the username is not null and there is no authentication
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
-
-            // validate token
-            if (jwtService.isTokenValid(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+            // Vérifier si l'en-tête Authorization existe et commence par "Bearer "
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                filterChain.doFilter(request, response);
+                return;
             }
+
+            try {
+                // Extraire le token
+                jwt = authHeader.substring(7);
+                username = jwtService.extractUsername(jwt);
+
+                if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    // Charger les détails de l'utilisateur
+                    UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+
+                    // Valider le token
+                    if (jwtService.isTokenValid(jwt, userDetails)) {
+                        // Créer l'objet d'authentification
+                        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
+                        
+                        // Définir les détails de l'authentification
+                        authToken.setDetails(
+                            new WebAuthenticationDetailsSource().buildDetails(request)
+                        );
+                        
+                        // Mettre à jour le contexte de sécurité
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                        
+                        logger.info("Authentifié l'utilisateur : " + username);
+                    }
+                }
+            } catch (Exception e) {
+                logger.error("Impossible d'authentifier l'utilisateur: ", e);
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Erreur d'authentification");
+                return;
+            }
+            
+            filterChain.doFilter(request, response);
+            
+        } catch (Exception e) {
+            logger.error("Erreur dans le filtre JWT: ", e);
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Erreur interne du serveur");
         }
-        filterChain.doFilter(request, response);
     }
 }
 
