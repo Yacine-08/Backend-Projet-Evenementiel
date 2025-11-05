@@ -11,6 +11,7 @@ public class EventResponse {
     private String title;
     private String description;
     private String location;
+    private String address;
     private LocalDateTime dateTimeStart;
     private LocalDateTime dateTimeEnd;
     private String typeEvent;

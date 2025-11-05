@@ -39,6 +39,7 @@ public class EventService {
         event.setTitle(dto.getTitle());
         event.setDescription(dto.getDescription());
         event.setLocation(dto.getLocation());
+        event.setAddress(dto.getAddress());
         event.setDateTimeStart(dto.getDateTimeStart());
         event.setDateTimeEnd(dto.getDateTimeEnd());
         event.setTypeEvent(dto.getTypeEvent());
@@ -77,6 +78,9 @@ public class EventService {
         }
         if (dto.getLocation() != null) {
             event.setLocation(dto.getLocation());
+        }
+        if (dto.getAddress() != null) {
+            event.setAddress(dto.getAddress());
         }
         if (dto.getDateTimeStart() != null) {
             event.setDateTimeStart(dto.getDateTimeStart());

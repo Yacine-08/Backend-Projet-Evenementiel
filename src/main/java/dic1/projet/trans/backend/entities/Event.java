@@ -38,6 +38,8 @@ public class Event {
     @NotBlank(message = "Location is required")
     private String location;
 
+    private String address;
+
     @NotNull(message = "Start date is required")
     @Future(message = "Start date must be in the future")
     private LocalDateTime dateTimeStart;

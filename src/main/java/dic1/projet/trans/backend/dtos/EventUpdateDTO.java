@@ -15,6 +15,7 @@ public class EventUpdateDTO {
     private String title;
     private String description;
     private String location;
+    private String address;
     
     @Future(message = "Start date must be in the future")
     private LocalDateTime dateTimeStart;

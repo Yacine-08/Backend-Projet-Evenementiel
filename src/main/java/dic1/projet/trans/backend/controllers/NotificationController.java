@@ -72,28 +72,19 @@ public class NotificationController {
                     "message", "Notifications créées avec succès"
             ));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("success", false, "error", e.getMessage()));
         }
     }
 
     @Operation(summary = "Récupérer mes notifications")
     @GetMapping("/me")
-    public ResponseEntity<List<NotificationResponse>> getMyNotifications(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size,
-            Authentication authentication) {
-
+    public ResponseEntity<List<NotificationResponse>> getMyNotifications(Authentication authentication) {
         User currentUser = authenticationService.getCurrentUser(authentication);
         List<Notification> notifications = notificationService.getUserNotifications(currentUser.getIdUser());
-
-        int start = page * size;
-        int end = Math.min(start + size, notifications.size());
-
-        List<NotificationResponse> responses = notifications.subList(
-                Math.min(start, notifications.size()), end
-        ).stream().map(this::convertToResponse).collect(Collectors.toList());
-
+        List<NotificationResponse> responses = notifications.stream()
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(responses);
     }
 

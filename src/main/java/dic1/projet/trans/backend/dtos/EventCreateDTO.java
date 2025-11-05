@@ -21,6 +21,8 @@ public class EventCreateDTO {
     
     @NotBlank(message = "Le lieu est obligatoire")
     private String location;
+
+    private String address;
     
     @NotNull(message = "La date de début est obligatoire")
     @Future(message = "La date de début doit être dans le futur")

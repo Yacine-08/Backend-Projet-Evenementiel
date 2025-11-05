@@ -7,6 +7,8 @@ import dic1.projet.trans.backend.entities.User;
 import dic1.projet.trans.backend.enums.EventType;
 import dic1.projet.trans.backend.enums.NotificationStatus;
 import dic1.projet.trans.backend.enums.NotificationType;
+import java.util.HashMap;
+import java.util.Map;
 import dic1.projet.trans.backend.repositories.EventRepository;
 import dic1.projet.trans.backend.repositories.NotificationRepository;
 import dic1.projet.trans.backend.repositories.UserRepository;
@@ -32,6 +34,9 @@ public class NotificationService {
 
     @Autowired
     private EventRepository eventRepository;
+    
+    @Autowired
+    private EmailService emailService;
 
 
     // Créer des notifications en masse
@@ -524,5 +529,155 @@ public class NotificationService {
     @Transactional
     public void deleteAllUserNotifications(String userId) {
         notificationRepository.deleteByRecipientIdUser(userId);
+    }
+
+    // ========== MÉTHODES POUR LES NOTIFICATIONS DES ORGANISATEURS ==========
+
+    /**
+     * Crée une notification pour la création d'un événement (brouillon ou publié)
+     */
+    @Transactional
+    public void notifyEventCreated(Event event, boolean isDraft) {
+        NotificationType type = isDraft ? NotificationType.EVENT_CREATED_DRAFT : NotificationType.EVENT_PUBLISHED;
+        String title = isDraft ? "Brouillon d'événement créé" : "Événement publié";
+        String content = String.format("Votre événement \"%s\" a été %s avec succès.",
+                event.getTitle(),
+                isDraft ? "enregistré comme brouillon" : "publié");
+
+        createOrganizerNotification(
+                title,
+                content,
+                type,
+                event.getOrganizer(),
+                event
+        );
+    }
+
+    /**
+     * Crée une notification pour une nouvelle réservation
+     */
+    @Transactional
+    public void notifyNewBooking(Event event, String bookingId) {
+        String title = "Nouvelle réservation";
+        String content = String.format("Nouvelle réservation pour l'événement \"%s\".", event.getTitle());
+        
+        Map<String, String> metadata = new HashMap<>();
+        metadata.put("remainingTickets", String.valueOf(event.getCapacityMaximal() - event.getCurrentParticipantCount()));
+
+        createOrganizerNotification(
+                title,
+                content,
+                NotificationType.NEW_BOOKING,
+                event.getOrganizer(),
+                event,
+                metadata
+        );
+
+        // Vérifier le seuil de billets restants
+        checkTicketsThreshold(event);
+    }
+
+    /**
+     * Vérifie le seuil de billets restants et envoie une notification si nécessaire
+     */
+    private void checkTicketsThreshold(Event event) {
+        int remainingTickets = event.getCapacityMaximal() - event.getCurrentParticipantCount();
+        
+        if (remainingTickets == 0) {
+            notifyTicketsSoldOut(event);
+        } else if (remainingTickets == 10) {
+            notifyLowTickets(event);
+        }
+    }
+
+    /**
+     * Crée une notification pour un stock de billets faible
+     */
+    @Transactional
+    public void notifyLowTickets(Event event) {
+        String title = "Stock de billets faible";
+        String content = String.format("Attention, il ne reste que 10 billets pour l'événement \"%s\".", event.getTitle());
+        
+        Map<String, String> metadata = new HashMap<>();
+        metadata.put("remainingTickets", "10");
+
+        createOrganizerNotification(
+                title,
+                content,
+                NotificationType.TICKETS_LOW_STOCK,
+                event.getOrganizer(),
+                event,
+                metadata
+        );
+    }
+
+    /**
+     * Crée une notification pour un événement complet
+     */
+    @Transactional
+    public void notifyTicketsSoldOut(Event event) {
+        String title = "Événement complet";
+        String content = String.format("Tous les billets pour l'événement \"%s\" ont été vendus !", event.getTitle());
+        
+        Map<String, String> metadata = new HashMap<>();
+        metadata.put("remainingTickets", "0");
+
+        createOrganizerNotification(
+                title,
+                content,
+                NotificationType.TICKETS_SOLD_OUT,
+                event.getOrganizer(),
+                event,
+                metadata
+        );
+    }
+
+    /**
+     * Méthode utilitaire pour créer une notification pour un organisateur
+     */
+    private Notification createOrganizerNotification(
+            String title,
+            String content,
+            NotificationType type,
+            User organizer,
+            Event event
+    ) {
+        return createOrganizerNotification(title, content, type, organizer, event, null);
+    }
+
+    private Notification createOrganizerNotification(
+            String title,
+            String content,
+            NotificationType type,
+            User organizer,
+            Event event,
+            Map<String, String> additionalMetadata
+    ) {
+        Map<String, String> metadata = new HashMap<>();
+        metadata.put("eventId", event.getIdEvent());
+        metadata.put("eventTitle", event.getTitle());
+        
+        if (additionalMetadata != null) {
+            metadata.putAll(additionalMetadata);
+        }
+
+        // Créer la requête de notification
+        CreateNotificationRequest request = new CreateNotificationRequest();
+        request.setTitle(title);
+        request.setContent(content);
+        request.setType(type);
+        request.setMetadata(metadata);
+        request.setRecipientIds(List.of(organizer.getIdUser()));
+        request.setActionUrl("/events/" + event.getIdEvent());
+
+        // Créer et retourner la notification
+        return createBulkNotifications(
+                request.getRecipientIds(),
+                title,
+                content,
+                type,
+                metadata,
+                request.getActionUrl()
+        ).get(0);
     }
 }

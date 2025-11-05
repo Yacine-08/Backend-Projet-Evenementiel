@@ -12,7 +12,12 @@ public enum NotificationType {
     PAYMENT_REFUND("Remboursement"),
     ACCOUNT_VERIFIED("Compte vérifié"),
     SYSTEM_ALERT("Alerte système"),
-    CUSTOM("Personnalisé");
+    CUSTOM("Personnalisé"),
+    EVENT_CREATED_DRAFT("Événement créé (brouillon)"),
+    EVENT_PUBLISHED("Événement publié"),
+    NEW_BOOKING("Nouvelle réservation"),
+    TICKETS_LOW_STOCK("Stock de billets faible (10 restants)"),
+    TICKETS_SOLD_OUT("Événement complet - Plus de billets disponibles");
 
     private final String displayName;
 
