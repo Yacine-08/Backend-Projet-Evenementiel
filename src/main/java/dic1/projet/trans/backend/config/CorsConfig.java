@@ -9,9 +9,14 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins("http://localhost:4200") // ou l'URL de votre frontend
+                .allowedOrigins(
+                    "http://localhost:3000",  // React default port
+                    "http://localhost:4200",  // Angular default port
+                    "http://localhost:8080"   // Common frontend port
+                )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
-                .allowCredentials(true);
+                .allowCredentials(true)
+                .maxAge(3600);
     }
 }

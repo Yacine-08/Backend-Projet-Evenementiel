@@ -168,7 +168,11 @@ public class AuthenticationService {
             }
 
 
+            // Generate JWT token
+            String jwtToken = jwtService.generateToken(user);
+            
             return AuthenticationResponse.builder()
+                    .token(jwtToken)
                     .user(mapToUserDto(user))
                     .build();
 
