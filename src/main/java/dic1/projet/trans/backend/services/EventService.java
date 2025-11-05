@@ -50,7 +50,13 @@ public class EventService {
         event.setRefundPolicy(dto.getRefundPolicy());
         event.setCreationDateTime(LocalDateTime.now());
 
-        return eventRepository.save(event);
+        Event savedEvent = eventRepository.save(event);
+        
+        // Envoyer une notification à l'organisateur en fonction du statut de l'événement
+        boolean isDraft = savedEvent.getEventStatus() == EventStatus.DRAFT;
+        notificationService.notifyEventCreated(savedEvent, isDraft);
+        
+        return savedEvent;
     }
 
     /**
