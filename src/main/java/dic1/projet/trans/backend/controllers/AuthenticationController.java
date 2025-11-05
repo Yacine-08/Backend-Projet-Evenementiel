@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Authentification", description = "Endpoints pour gérer l'inscription, la connexion et le profil utilisateur")
 public class AuthenticationController {
 
