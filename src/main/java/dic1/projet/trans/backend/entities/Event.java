@@ -68,13 +68,18 @@ public class Event {
 
     private String image;
 
-    @AssertTrue(message = "Si le remboursement est activé, le délai doit être spécifié")
+    @AssertTrue(message = "Si le remboursement est activé, le délai et la politique de remboursement doivent être spécifiés")
     public boolean isRefundConfigValid() {
+        // Si le remboursement est désactivé, on ne valide pas les autres champs
         if (!refundEnabled) {
-            return true; // Pas de validation nécessaire si le remboursement est désactivé
+            return true;
         }
-        return refundDeadlineDays != null && refundDeadlineDays >= 0 && 
-               refundConditions != null && !refundConditions.trim().isEmpty();
+        
+        // Si le remboursement est activé, on vérifie que les champs requis sont présents
+        boolean hasValidDeadline = refundDeadlineDays != null && refundDeadlineDays >= 0;
+        boolean hasValidPolicy = refundPolicy != null && !refundPolicy.trim().isEmpty();
+        
+        return hasValidDeadline && hasValidPolicy;
     }
     
     private String refundPolicy;
