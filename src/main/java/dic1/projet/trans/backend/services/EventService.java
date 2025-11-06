@@ -49,36 +49,53 @@ public class EventService {
      */
     @Transactional
     public Event createEvent(EventCreateDTO dto, User organizer) {
-        Event event = new Event();
-        event.setTitle(dto.getTitle());
-        event.setDescription(dto.getDescription());
-        event.setLocation(dto.getLocation());
-        event.setAddress(dto.getAddress());
-        event.setDateTimeStart(dto.getDateTimeStart());
-        event.setDateTimeEnd(dto.getDateTimeEnd());
-        event.setTypeEvent(dto.getTypeEvent());
-        event.setEventStatus(dto.getEventStatus());
-        event.setCapacityMaximal(dto.getCapacityMaximal());
-        event.setOrganizer(organizer);
-        event.setImage(dto.getImage());
-        event.setRefundPolicy(dto.getRefundPolicy());
-        event.setCreationDateTime(LocalDateTime.now());
+        try {
+            Event event = new Event();
+            event.setTitle(dto.getTitle());
+            event.setDescription(dto.getDescription());
+            event.setCategory(dto.getCategory()); // Ajout de la catégorie
+            event.setLocation(dto.getLocation());
+            event.setAddress(dto.getAddress());
+            event.setDateTimeStart(dto.getDateTimeStart());
+            event.setDateTimeEnd(dto.getDateTimeEnd());
+            event.setTypeEvent(dto.getTypeEvent());
+            event.setEventStatus(dto.getEventStatus());
+            event.setCapacityMaximal(dto.getCapacityMaximal());
+            event.setOrganizer(organizer);
+            event.setImage(dto.getImage());
+            // Gestion des remboursements
+            event.setRefundEnabled(dto.isRefundEnabled());
+            event.setRefundPolicy(dto.getRefundPolicy());
+            event.setRefundConditions(dto.getRefundConditions());
+            event.setRefundDeadlineDays(dto.getRefundDeadlineDays());
+            
+            event.setCreationDateTime(LocalDateTime.now());
 
-        // Sauvegarder d'abord l'événement pour obtenir son ID
-        Event savedEvent = eventRepository.save(event);
-        
-        // Créer les billets associés à l'événement
-        if (dto.getTickets() != null && !dto.getTickets().isEmpty()) {
-            for (TicketCreateDTO ticketDto : dto.getTickets()) {
-                ticketService.createTicket(ticketDto, savedEvent);
+            // Valider la configuration des remboursements
+            if (!event.isRefundConfigValid()) {
+                throw new IllegalArgumentException("Configuration de remboursement invalide");
             }
+
+            // Sauvegarder d'abord l'événement pour obtenir son ID
+            Event savedEvent = eventRepository.save(event);
+            
+            // Créer les billets associés à l'événement
+            if (dto.getTickets() != null && !dto.getTickets().isEmpty()) {
+                for (TicketCreateDTO ticketDto : dto.getTickets()) {
+                    ticketService.createTicket(ticketDto, savedEvent);
+                }
+            }
+            
+            // Envoyer une notification à l'organisateur en fonction du statut de l'événement
+            boolean isDraft = savedEvent.getEventStatus() == EventStatus.DRAFT;
+            notificationService.notifyEventCreated(savedEvent, isDraft);
+            
+            return savedEvent;
+        } catch (Exception e) {
+            // Log l'erreur pour le débogage
+            e.printStackTrace();
+            throw new RuntimeException("Erreur lors de la création de l'événement: " + e.getMessage(), e);
         }
-        
-        // Envoyer une notification à l'organisateur en fonction du statut de l'événement
-        boolean isDraft = savedEvent.getEventStatus() == EventStatus.DRAFT;
-        notificationService.notifyEventCreated(savedEvent, isDraft);
-        
-        return savedEvent;
     }
 
     /**

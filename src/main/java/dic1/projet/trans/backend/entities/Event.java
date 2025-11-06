@@ -69,7 +69,7 @@ public class Event {
     private String image;
 
     @AssertTrue(message = "Si le remboursement est activé, le délai doit être spécifié")
-    private boolean isRefundConfigValid() {
+    public boolean isRefundConfigValid() {
         if (!refundEnabled) {
             return true; // Pas de validation nécessaire si le remboursement est désactivé
         }

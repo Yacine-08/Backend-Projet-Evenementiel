@@ -33,7 +33,6 @@ public class Ticket {
 
     private int soldQuantity = 0;
 
-    @DBRef(lazy = true)
     @NotNull(message = "L'événement est requis")
     private String eventId;
 

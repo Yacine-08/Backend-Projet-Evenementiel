@@ -3,6 +3,7 @@ package dic1.projet.trans.backend.controllers;
 import dic1.projet.trans.backend.dtos.*;
 import dic1.projet.trans.backend.entities.Event;
 import dic1.projet.trans.backend.entities.User;
+import dic1.projet.trans.backend.enums.EventType;
 import dic1.projet.trans.backend.enums.Role;
 import dic1.projet.trans.backend.services.AuthenticationService;
 import dic1.projet.trans.backend.services.EventService;
@@ -36,16 +37,43 @@ public class EventController {
     public ResponseEntity<?> createEvent(
             @Valid @RequestBody EventCreateDTO dto,
             Authentication authentication) {
+        try {
+            User currentUser = authenticationService.getCurrentUser(authentication);
 
-        User currentUser = authenticationService.getCurrentUser(authentication);
+            if (!currentUser.getRoles().contains(Role.ORGANIZER)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("success", false, "error", "Seuls les organisateurs peuvent créer des événements"));
+            }
 
-        if (!currentUser.getRoles().contains(Role.ORGANIZER)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Seuls les organisateurs peuvent créer des événements"));
+            // Validation des dates
+            if (dto.getDateTimeStart() != null && dto.getDateTimeEnd() != null && 
+                dto.getDateTimeEnd().isBefore(dto.getDateTimeStart())) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("success", false, "error", "La date de fin doit être postérieure à la date de début"));
+            }
+
+            // Validation des billets pour un événement payant
+            if (dto.getTypeEvent() != null && dto.getTypeEvent() == EventType.PAID &&
+                (dto.getTickets() == null || dto.getTickets().isEmpty())) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("success", false, "error", "Un événement payant doit avoir au moins un type de billet"));
+            }
+
+            Event event = eventService.createEvent(dto, currentUser);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(Map.of(
+                        "success", true, 
+                        "event", event,
+                        "eventId", event.getIdEvent()
+                    ));
+                    
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("success", false, "error", "Une erreur est survenue lors de la création de l'événement: " + e.getMessage()));
         }
-
-        Event event = eventService.createEvent(dto, currentUser);
-        return ResponseEntity.status(HttpStatus.CREATED).body(event);
     }
 
     @Operation(summary = "Mettre à jour un événement")
