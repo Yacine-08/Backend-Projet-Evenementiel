@@ -3,11 +3,13 @@ package dic1.projet.trans.backend.services;
 import dic1.projet.trans.backend.dtos.CreateBookingRequest;
 import dic1.projet.trans.backend.dtos.ReservedTicketRequest;
 import dic1.projet.trans.backend.entities.Booking;
+import dic1.projet.trans.backend.entities.Event;
 import dic1.projet.trans.backend.entities.Ticket;
 import dic1.projet.trans.backend.enums.BookingStatus;
 import dic1.projet.trans.backend.exceptions.BadRequestException;
 import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
 import dic1.projet.trans.backend.repositories.BookingRepository;
+import dic1.projet.trans.backend.repositories.EventRepository;
 import dic1.projet.trans.backend.repositories.TicketRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,8 @@ public class BookingService {
 
     private final BookingRepository bookingRepository;
     private final TicketRepository ticketRepository;
+    private final EventRepository eventRepository;
+    private final NotificationService notificationService;
 
     public Booking createBooking(String userId, CreateBookingRequest request) {
         if (request.getTickets() == null || request.getTickets().isEmpty()) {
@@ -58,11 +62,27 @@ public class BookingService {
         booking.setTotalAmount(totalAmount);
         booking.setBookingDate(LocalDateTime.now());
         booking.setPaymentMethod(request.getPaymentMethod());
-        booking.setBookingStatus(BookingStatus.CONFIRMED); // par défaut confirmé
+        booking.setBookingStatus(BookingStatus.CONFIRMED); 
         booking.setClientId(userId);
         booking.setTickets(reservedTickets);
 
-        return bookingRepository.save(booking);
+        Booking savedBooking = bookingRepository.save(booking);
+        
+        // Récupérer l'événement associé au premier ticket pour envoyer une notification à l'organisateur
+        if (!reservedTickets.isEmpty()) {
+            String ticketId = reservedTickets.get(0).getTicketId();
+            Ticket firstTicket = ticketRepository.findById(ticketId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Ticket non trouvé: " + ticketId));
+                    
+            // Récupérer l'événement associé au ticket
+            Event event = eventRepository.findById(firstTicket.getEventId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Événement non trouvé pour le ticket: " + ticketId));
+            
+            // Envoyer une notification à l'organisateur
+            notificationService.notifyNewBooking(event, savedBooking.getBookingId());
+        }
+
+        return savedBooking;
     }
 
     public List<Booking> getBookingsForUser(String userId) {

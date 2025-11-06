@@ -491,12 +491,28 @@ public class NotificationService {
         Notification notification = notificationRepository.findById(notificationId)
                 .orElseThrow(() -> new RuntimeException("Notification non trouvée"));
 
+        // Vérifier que l'utilisateur est bien le destinataire de la notification
         if (!notification.getRecipient().getIdUser().equals(userId)) {
-            throw new SecurityException("Non autorisé");
+            throw new SecurityException("Non autorisé à modifier cette notification");
         }
 
         notification.setRead(true);
         notification.setStatus(NotificationStatus.READ);
+        return notificationRepository.save(notification);
+    }
+    
+    @Transactional
+    public Notification markAsUnread(String notificationId, String userId) {
+        Notification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new RuntimeException("Notification non trouvée"));
+
+        // Vérifier que l'utilisateur est bien le destinataire de la notification
+        if (!notification.getRecipient().getIdUser().equals(userId)) {
+            throw new SecurityException("Non autorisé à modifier cette notification");
+        }
+
+        notification.setRead(false);
+        notification.setStatus(NotificationStatus.UNREAD);
         return notificationRepository.save(notification);
     }
 
@@ -504,7 +520,6 @@ public class NotificationService {
     public int markAllAsRead(String userId) {
         List<Notification> unreadNotifications = notificationRepository
                 .findByRecipientIdUserAndIsRead(userId, false);
-
         unreadNotifications.forEach(notification -> {
             notification.setRead(true);
             notification.setStatus(NotificationStatus.READ);

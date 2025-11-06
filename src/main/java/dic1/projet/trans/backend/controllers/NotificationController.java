@@ -113,6 +113,24 @@ public class NotificationController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         }
     }
+    
+    @Operation(summary = "Marquer une notification comme non lue")
+    @PutMapping("/{notificationId}/unread")
+    public ResponseEntity<?> markAsUnread(
+            @PathVariable String notificationId,
+            Authentication authentication) {
+
+        User currentUser = authenticationService.getCurrentUser(authentication);
+
+        try {
+            Notification notification = notificationService.markAsUnread(notificationId, currentUser.getIdUser());
+            return ResponseEntity.ok(convertToResponse(notification));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
+    }
 
     @Operation(summary = "Supprimer toutes mes notifications")
     @DeleteMapping("/me")

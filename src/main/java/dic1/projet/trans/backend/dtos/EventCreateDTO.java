@@ -1,13 +1,18 @@
 package dic1.projet.trans.backend.dtos;
+
 import dic1.projet.trans.backend.enums.EventStatus;
 import dic1.projet.trans.backend.enums.EventType;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 public class EventCreateDTO {
@@ -49,7 +54,10 @@ public class EventCreateDTO {
     private Integer refundDeadlineDays;
     private String refundConditions;
     private String refundPolicy;
-
+    
+    @Valid
+    @Size(min = 1, message = "Au moins un type de billet est requis")
+    private List<TicketCreateDTO> tickets = new ArrayList<>();
 
     public boolean isRefundable() {
         return refundPolicy != null && !refundPolicy.trim().isEmpty();

@@ -3,15 +3,19 @@ package dic1.projet.trans.backend.services;
 import dic1.projet.trans.backend.dtos.CreateEventRequest;
 import dic1.projet.trans.backend.dtos.EventCreateDTO;
 import dic1.projet.trans.backend.dtos.EventUpdateDTO;
+import dic1.projet.trans.backend.dtos.TicketCreateDTO;
 import dic1.projet.trans.backend.entities.Event;
 import dic1.projet.trans.backend.entities.User;
 import dic1.projet.trans.backend.enums.EventStatus;
 import dic1.projet.trans.backend.enums.Role;
+import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
+import dic1.projet.trans.backend.repositories.BookingRepository;
 import dic1.projet.trans.backend.repositories.EventRepository;
 import dic1.projet.trans.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
 
 import java.text.Normalizer;
 import java.time.LocalDate;
@@ -24,11 +28,21 @@ import java.util.stream.Collectors;
 @Service
 public class EventService {
 
-    @Autowired
-    private EventRepository eventRepository;
+    private final EventRepository eventRepository;
+    private final NotificationService notificationService;
+    private final TicketService ticketService;
+    private final BookingRepository bookingRepository;
 
     @Autowired
-    private NotificationService notificationService;
+    public EventService(EventRepository eventRepository, 
+                       NotificationService notificationService,
+                       TicketService ticketService,
+                       BookingRepository bookingRepository) {
+        this.eventRepository = eventRepository;
+        this.notificationService = notificationService;
+        this.ticketService = ticketService;
+        this.bookingRepository = bookingRepository;
+    }
 
     /**
      * Créer un nouvel événement
@@ -50,7 +64,15 @@ public class EventService {
         event.setRefundPolicy(dto.getRefundPolicy());
         event.setCreationDateTime(LocalDateTime.now());
 
+        // Sauvegarder d'abord l'événement pour obtenir son ID
         Event savedEvent = eventRepository.save(event);
+        
+        // Créer les billets associés à l'événement
+        if (dto.getTickets() != null && !dto.getTickets().isEmpty()) {
+            for (TicketCreateDTO ticketDto : dto.getTickets()) {
+                ticketService.createTicket(ticketDto, savedEvent);
+            }
+        }
         
         // Envoyer une notification à l'organisateur en fonction du statut de l'événement
         boolean isDraft = savedEvent.getEventStatus() == EventStatus.DRAFT;
@@ -182,9 +204,26 @@ public class EventService {
     /**
      * Récupérer un événement par ID
      */
+    /**
+     * Récupérer un événement par ID avec calcul du revenu en temps réel
+     */
     public Event getEventById(String eventId) {
-        return eventRepository.findById(eventId)
-                .orElseThrow(() -> new RuntimeException("Événement non trouvé"));
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResourceNotFoundException("Événement non trouvé avec l'ID: " + eventId));
+        
+        return event;
+    }
+
+    public double getRevenue(String eventId) {
+        return calculateEventRevenue(eventId);
+    }
+    
+    /**
+     * Calcule le revenu total d'un événement en fonction des réservations
+     */
+    public double calculateEventRevenue(String eventId) {
+        return bookingRepository.calculateTotalRevenueByEventId(eventId)
+                .orElse(0.0);
     }
 
     /**

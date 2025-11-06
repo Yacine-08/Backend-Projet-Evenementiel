@@ -1,6 +1,7 @@
 package dic1.projet.trans.backend.services;
 
 import dic1.projet.trans.backend.dtos.CreateTicketRequest;
+import dic1.projet.trans.backend.dtos.TicketCreateDTO;
 import dic1.projet.trans.backend.dtos.UpdateTicketRequest;
 import dic1.projet.trans.backend.entities.Event;
 import dic1.projet.trans.backend.entities.Ticket;
@@ -27,6 +28,25 @@ public class TicketService {
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
     private final TicketValidationService ticketValidationService;
+    
+    /**
+     * Crée un nouveau billet à partir d'un DTO lors de la création d'un événement
+     * @param ticketDto DTO contenant les informations du billet
+     * @param event Événement auquel le billet est associé
+     * @return Le billet créé
+     */
+    @Transactional
+    public Ticket createTicket(TicketCreateDTO ticketDto, Event event) {
+        Ticket ticket = new Ticket();
+        ticket.setTicketType(ticketDto.getTicketType());
+        ticket.setDescription(ticketDto.getDescription());
+        ticket.setPrice(ticketDto.getPrice());
+        ticket.setInitialQuantity(ticketDto.getInitialQuantity());
+        ticket.setSoldQuantity(0);
+        ticket.setEventId(event.getIdEvent());
+        
+        return ticketRepository.save(ticket);
+    }
 
     public Ticket createTicket(String userId, String eventId, CreateTicketRequest request) {
         Event event = eventRepository.findById(eventId)
