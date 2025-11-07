@@ -77,14 +77,18 @@ public class SecurityConfig {
                     // Points d'entrée organisateur
                     .requestMatchers("/api/organizer/**").hasAnyRole("ORGANIZER", "ADMINISTRATOR")
 
+                    // Revenue endpoints - temporarily allowing all authenticated users for testing
+                    .requestMatchers("/api/events/*/revenue").authenticated()
+                    .requestMatchers("/api/events/*/potential-revenue").authenticated()
+                    
+                    // Other event endpoints
+                    .requestMatchers("/api/events/**").hasAnyRole("CLIENT", "ORGANIZER", "ADMINISTRATOR")
+                    
                     // Points d'entrée authentifiés
                     .requestMatchers(
                             "/api/favorites/**",
                             "/api/notifications/**"
                     ).authenticated()
-
-                    // Gestion des événements
-                    .requestMatchers("/api/events/**").hasAnyRole("CLIENT", "ORGANIZER", "ADMINISTRATOR")
 
                     // Toutes les autres requêtes nécessitent une authentification
                     .anyRequest().authenticated()

@@ -5,12 +5,15 @@ import dic1.projet.trans.backend.dtos.EventCreateDTO;
 import dic1.projet.trans.backend.dtos.EventUpdateDTO;
 import dic1.projet.trans.backend.dtos.TicketCreateDTO;
 import dic1.projet.trans.backend.entities.Event;
+import dic1.projet.trans.backend.entities.Ticket;
 import dic1.projet.trans.backend.entities.User;
 import dic1.projet.trans.backend.enums.EventStatus;
+import dic1.projet.trans.backend.enums.EventType;
 import dic1.projet.trans.backend.enums.Role;
 import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
 import dic1.projet.trans.backend.repositories.BookingRepository;
 import dic1.projet.trans.backend.repositories.EventRepository;
+import dic1.projet.trans.backend.repositories.TicketRepository;
 import dic1.projet.trans.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -32,16 +35,19 @@ public class EventService {
     private final NotificationService notificationService;
     private final TicketService ticketService;
     private final BookingRepository bookingRepository;
+    private final TicketRepository ticketRepository;
 
     @Autowired
     public EventService(EventRepository eventRepository, 
                        NotificationService notificationService,
                        TicketService ticketService,
-                       BookingRepository bookingRepository) {
+                       BookingRepository bookingRepository,
+                       TicketRepository ticketRepository) {
         this.eventRepository = eventRepository;
         this.notificationService = notificationService;
         this.ticketService = ticketService;
         this.bookingRepository = bookingRepository;
+        this.ticketRepository = ticketRepository;
     }
 
     /**
@@ -233,6 +239,38 @@ public class EventService {
 
     public double getRevenue(String eventId) {
         return calculateEventRevenue(eventId);
+    }
+    
+    /**
+     * Récupère le nombre de réservations pour un événement
+     */
+    public long getBookingCount(String eventId) {
+        Map<String, Object> result = bookingRepository.countBookingsByEventId(eventId);
+        if (result != null && result.containsKey("count")) {
+            return ((Number) result.get("count")).longValue();
+        }
+        return 0L;
+    }
+    
+    /**
+     * Calcule le revenu potentiel d'un événement (somme des prix de tous les billets disponibles)
+     * @param eventId ID de l'événement
+     * @return Le revenu potentiel total
+     */
+    public double calculatePotentialRevenue(String eventId) {
+        Event event = eventRepository.findById(eventId)
+            .orElseThrow(() -> new IllegalArgumentException("Événement non trouvé avec l'ID: " + eventId));
+            
+        if (event.getTypeEvent() != EventType.PAID) {
+            return 0.0; // Les événements gratuits n'ont pas de revenu potentiel
+        }
+        
+        // Récupérer tous les tickets pour cet événement
+        List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+        
+        return tickets.stream()
+            .mapToDouble(ticket -> ticket.getPrice() * ticket.getInitialQuantity())
+            .sum();
     }
     
     /**
