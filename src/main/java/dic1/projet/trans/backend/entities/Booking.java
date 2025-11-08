@@ -17,11 +17,13 @@ import java.util.List;
 public class Booking {
     @Id
     private String bookingId;
+    private String eventId;
     private double totalAmount;
     private LocalDateTime bookingDate;
     private String paymentMethod;
     private BookingStatus bookingStatus;
     private String clientId;
+    private String groupId;
 
     @Data
     @NoArgsConstructor
@@ -29,7 +31,26 @@ public class Booking {
     public static class ReservedTicket {
         private String ticketId;
         private int quantity;
+        
+        @Override
+        public String toString() {
+            return "{ticketId='" + ticketId + "', quantity=" + quantity + "}";
+        }
     }
     
     private List<ReservedTicket> tickets;
+    
+    @Override
+    public String toString() {
+        return "Booking{" +
+                "bookingId='" + bookingId + '\'' +
+                ", eventId='" + eventId + '\'' +
+                ", totalAmount=" + totalAmount +
+                ", bookingDate=" + bookingDate +
+                ", paymentMethod='" + paymentMethod + '\'' +
+                ", bookingStatus=" + bookingStatus +
+                ", clientId='" + clientId + '\'' +
+                ", tickets=" + tickets +
+                '}';
+    }
 }

@@ -4,9 +4,11 @@ import dic1.projet.trans.backend.dtos.CreateEventRequest;
 import dic1.projet.trans.backend.dtos.EventCreateDTO;
 import dic1.projet.trans.backend.dtos.EventUpdateDTO;
 import dic1.projet.trans.backend.dtos.TicketCreateDTO;
+import dic1.projet.trans.backend.entities.Booking;
 import dic1.projet.trans.backend.entities.Event;
 import dic1.projet.trans.backend.entities.Ticket;
 import dic1.projet.trans.backend.entities.User;
+import dic1.projet.trans.backend.enums.BookingStatus;
 import dic1.projet.trans.backend.enums.EventStatus;
 import dic1.projet.trans.backend.enums.EventType;
 import dic1.projet.trans.backend.enums.Role;
@@ -244,12 +246,24 @@ public class EventService {
     /**
      * Récupère le nombre de réservations pour un événement
      */
+
     public long getBookingCount(String eventId) {
-        Map<String, Object> result = bookingRepository.countBookingsByEventId(eventId);
-        if (result != null && result.containsKey("count")) {
-            return ((Number) result.get("count")).longValue();
-        }
-        return 0L;
+        System.out.println("=== DEBUG: Getting booking count for event: " + eventId);
+
+        // Compter uniquement les réservations confirmées
+        List<Booking> bookings = bookingRepository.findByEventIdAndBookingStatus(
+                eventId,
+                BookingStatus.CONFIRMED
+        );
+
+        // Calculer le nombre total de billets
+        long totalTickets = bookings.stream()
+                .flatMap(booking -> booking.getTickets().stream())
+                .mapToLong(Booking.ReservedTicket::getQuantity)
+                .sum();
+
+        System.out.println("=== DEBUG: Total tickets across all bookings: " + totalTickets);
+        return totalTickets;
     }
     
     /**
@@ -277,8 +291,48 @@ public class EventService {
      * Calcule le revenu total d'un événement en fonction des réservations
      */
     public double calculateEventRevenue(String eventId) {
-        return bookingRepository.calculateTotalRevenueByEventId(eventId)
-                .orElse(0.0);
+        System.out.println("=== DEBUG: Calculating revenue for event: " + eventId);
+        Double revenue = bookingRepository.calculateTotalRevenueByEventId(eventId);
+        System.out.println("=== DEBUG: Raw revenue from repository: " + revenue);
+        
+        // If no revenue is found from the aggregation, calculate it manually
+        if (revenue == null || revenue == 0.0) {
+            List<Booking> bookings = bookingRepository.findByEventIdAndBookingStatus(eventId, BookingStatus.CONFIRMED);
+            System.out.println("=== DEBUG: Found " + bookings.size() + " confirmed bookings for event " + eventId);
+            
+            if (!bookings.isEmpty()) {
+                double calculatedRevenue = 0.0;
+                
+                for (Booking booking : bookings) {
+                    System.out.println("=== DEBUG: Processing booking: " + booking.getBookingId());
+                    
+                    if (booking.getTickets() != null && !booking.getTickets().isEmpty()) {
+                        System.out.println("=== DEBUG: Booking has " + booking.getTickets().size() + " tickets");
+                        
+                        for (Booking.ReservedTicket ticket : booking.getTickets()) {
+                            System.out.println("=== DEBUG: Ticket ID: " + ticket.getTicketId() + ", Quantity: " + ticket.getQuantity());
+                            
+                            // Look up the ticket price
+                            Optional<Ticket> ticketInfo = ticketRepository.findById(ticket.getTicketId());
+                            if (ticketInfo.isPresent()) {
+                                double ticketAmount = ticketInfo.get().getPrice() * ticket.getQuantity();
+                                System.out.println("=== DEBUG: Ticket price: " + ticketInfo.get().getPrice());
+                                System.out.println("=== DEBUG: Calculated amount: " + ticketAmount);
+                                calculatedRevenue += ticketAmount;
+                            } else {
+                                System.out.println("=== DEBUG: Could not find ticket with ID: " + ticket.getTicketId());
+                            }
+                        }
+                    }
+                }
+                
+                System.out.println("=== DEBUG: Total calculated revenue: " + calculatedRevenue);
+                return calculatedRevenue;
+            }
+            return 0.0;
+        }
+        
+        return revenue;
     }
 
     /**

@@ -23,13 +23,13 @@ public class BookingController {
 
     private final BookingService bookingService;
 
-    @PostMapping
-    @Operation(summary = "Créer une réservation", description = "Crée une réservation pour des tickets. Authentification requise.")
-    public ResponseEntity<Booking> createBooking(@AuthenticationPrincipal UserDetails userDetails,
-                                                 @Valid @RequestBody CreateBookingRequest request) {
+    @PostMapping("/create")
+    @Operation(summary = "Créer une réservation", description = "Crée une ou plusieurs réservations pour des tickets. Authentification requise.")
+    public ResponseEntity<List<Booking>> createBooking(@AuthenticationPrincipal UserDetails userDetails,
+                                                     @Valid @RequestBody CreateBookingRequest request) {
         User user = (User) userDetails;
-        Booking booking = bookingService.createBooking(user.getIdUser(), request);
-        return ResponseEntity.ok(booking);
+        List<Booking> bookings = bookingService.createBooking(user.getIdUser(), request);
+        return ResponseEntity.ok(bookings);
     }
 
     @GetMapping("/me")

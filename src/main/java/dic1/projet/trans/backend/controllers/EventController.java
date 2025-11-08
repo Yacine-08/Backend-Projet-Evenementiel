@@ -174,39 +174,69 @@ public class EventController {
     public ResponseEntity<Map<String, Object>> getEventBookingCount(
             @PathVariable String eventId,
             Authentication authentication) {
-        
+                
+        if (authentication != null) {
+            System.out.println("=== DEBUG [booking-count]: Authentication authorities: " + authentication.getAuthorities());
+        }
+
         // Vérifier l'authentification
         if (authentication == null || !authentication.isAuthenticated()) {
+            System.out.println("=== DEBUG [booking-count]: Authentication required");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(Map.of("success", false, "error", "Authentification requise"));
         }
         
-        // Vérifier si l'utilisateur est l'organisateur ou un administrateur
+        // Get current user
         User currentUser = authenticationService.getCurrentUser(authentication);
-        Optional<Event> eventOpt = eventRepository.findById(eventId);
+        if (currentUser == null) {
+            System.out.println("=== DEBUG [booking-count]: Current user is null");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("success", false, "error", "Utilisateur non trouvé"));
+        }
         
+        System.out.println("=== DEBUG [booking-count]: Current user ID: " + currentUser.getIdUser());
+        System.out.println("=== DEBUG [booking-count]: Current user roles: " + currentUser.getRoles());
+        
+        // Vérifier si l'événement existe
+        Optional<Event> eventOpt = eventRepository.findById(eventId);
         if (eventOpt.isEmpty()) {
+            System.out.println("=== DEBUG [booking-count]: Event not found with ID: " + eventId);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Map.of("success", false, "error", "Événement non trouvé"));
         }
         
         Event event = eventOpt.get();
+        System.out.println("=== DEBUG [booking-count]: Event found. Organizer ID: " + event.getOrganizer().getIdUser());
+        
         boolean isOrganizer = event.getOrganizer().getIdUser().equals(currentUser.getIdUser());
+        System.out.println("=== DEBUG [booking-count]: Is organizer: " + isOrganizer);
+        
         boolean isAdmin = currentUser.getAuthorities().stream()
-            .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMINISTRATOR"));
+            .anyMatch(auth -> {
+                boolean matches = auth.getAuthority().equals("ROLE_ADMINISTRATOR");
+                System.out.println("=== DEBUG [booking-count]: Checking authority: " + auth.getAuthority() + " matches ADMINISTRATOR: " + matches);
+                return matches;
+            });
+            
+        System.out.println("=== DEBUG [booking-count]: Is admin: " + isAdmin);
             
         if (!isOrganizer && !isAdmin) {
+            System.out.println("=== DEBUG [booking-count]: Access denied - User is neither organizer nor admin");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Map.of("success", false, "error", "Non autorisé à accéder à ces informations"));
         }
         
+        System.out.println("=== DEBUG [booking-count]: Access granted - User is authorized");
         try {
             long bookingCount = eventService.getBookingCount(eventId);
+            System.out.println("=== DEBUG [booking-count]: Booking count: " + bookingCount);
             return ResponseEntity.ok(Map.of(
                 "success", true,
                 "bookingCount", bookingCount
             ));
         } catch (Exception e) {
+            System.out.println("=== DEBUG [booking-count]: Error: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of(
                     "success", false,
@@ -220,10 +250,7 @@ public class EventController {
     public ResponseEntity<Map<String, Object>> getEventRevenue(
             @PathVariable String eventId,
             Authentication authentication) {
-        
-        System.out.println("=== DEBUG: Entering getEventRevenue for eventId: " + eventId);
-        System.out.println("=== DEBUG: Authentication: " + (authentication != null ? authentication.getName() : "null"));
-        System.out.println("=== DEBUG: Authentication is authenticated: " + (authentication != null && authentication.isAuthenticated()));
+
         if (authentication != null) {
             System.out.println("=== DEBUG: Authentication authorities: " + authentication.getAuthorities());
         }
