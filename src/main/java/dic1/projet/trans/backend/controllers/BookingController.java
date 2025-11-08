@@ -13,6 +13,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
 
 @RestController
@@ -30,6 +31,21 @@ public class BookingController {
         User user = (User) userDetails;
         List<Booking> bookings = bookingService.createBooking(user.getIdUser(), request);
         return ResponseEntity.ok(bookings);
+    }
+
+
+
+    @PutMapping("/confirm/{id}")
+    @Operation(summary = "Confirmer une réservation", description = "Confirme une réservation (organisateur requis). Si group=true, confirme toutes les réservations du même groupe.")
+    public ResponseEntity<List<Booking>> confirmBooking(
+            @PathVariable String id,
+            @RequestParam(required = false, defaultValue = "false") boolean group) {
+        
+        if (group) {
+            return ResponseEntity.ok(bookingService.confirmBookingGroup(id));
+        } else {
+            return ResponseEntity.ok(Collections.singletonList(bookingService.confirmSingleBooking(id)));
+        }
     }
 
     @GetMapping("/me")

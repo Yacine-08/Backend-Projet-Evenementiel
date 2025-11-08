@@ -61,8 +61,7 @@ public class BookingService {
                 booking.setTotalAmount(ticket.getPrice());
                 booking.setBookingDate(LocalDateTime.now());
                 booking.setPaymentMethod(request.getPaymentMethod());
-//                booking.setBookingStatus(BookingStatus.PENDING);
-                booking.setBookingStatus(BookingStatus.CONFIRMED);
+                booking.setBookingStatus(BookingStatus.PENDING);
                 booking.setClientId(userId);
                 booking.setEventId(request.getEventId());
 
@@ -84,8 +83,8 @@ public class BookingService {
      * @return La réservation confirmée
      */
     @Transactional
-    public Booking confirmBooking(String bookingId) {
-        System.out.println("=== DEBUG: Confirming booking: " + bookingId);
+    public Booking confirmSingleBooking(String bookingId) {
+        System.out.println("=== DEBUG: Confirming single booking: " + bookingId);
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Réservation non trouvée"));
 
@@ -97,36 +96,81 @@ public class BookingService {
             throw new BadRequestException("Impossible de confirmer une réservation annulée");
         }
 
-        // Calculer le nombre total de billets vendus pour chaque ticket
-        Map<String, Integer> ticketQuantities = new HashMap<>();
+        // Vérifier la disponibilité des billets pour cette réservation uniquement
         for (Booking.ReservedTicket rt : booking.getTickets()) {
-            ticketQuantities.merge(rt.getTicketId(), rt.getQuantity(), Integer::sum);
-        }
-
-        // Vérifier la disponibilité
-        for (Map.Entry<String, Integer> entry : ticketQuantities.entrySet()) {
-            String ticketId = entry.getKey();
-            int quantity = entry.getValue();
-
-            // Calculer le nombre de billets déjà vendus
-            int alreadySold = bookingRepository.countSoldTicketsByTicketId(ticketId).orElse(0);
-            Ticket ticket = ticketRepository.findById(ticketId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Ticket non trouvé: " + ticketId));
-
+            Ticket ticket = ticketRepository.findById(rt.getTicketId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Ticket non trouvé: " + rt.getTicketId()));
+                    
+            // Compter les réservations confirmées pour ce ticket
+            int alreadySold = bookingRepository.countByTickets_TicketIdAndBookingStatus(
+                rt.getTicketId(), BookingStatus.CONFIRMED).orElse(0);
+                
+            // Vérifier la disponibilité en tenant compte de la quantité actuelle
             int available = ticket.getInitialQuantity() - alreadySold;
-            if (quantity > available) {
-                throw new BadRequestException(
-                        String.format("Stock insuffisant pour le ticket %s. Disponible: %d, Demandé: %d",
-                                ticketId, available, quantity)
-                );
+            if (rt.getQuantity() > available) {
+                throw new BadRequestException("Quantité insuffisante pour le ticket " + ticket.getTicketType() + 
+                    ". Disponible: " + available + ", Demandé: " + rt.getQuantity());
             }
         }
 
         // Mettre à jour le statut de la réservation
         booking.setBookingStatus(BookingStatus.CONFIRMED);
-
-        System.out.println("=== DEBUG: Réservation confirmée avec succès");
+        
+        // Mettre à jour les quantités vendues pour chaque ticket
+        for (Booking.ReservedTicket rt : booking.getTickets()) {
+            ticketRepository.findById(rt.getTicketId()).ifPresent(ticket -> {
+                // Compter les réservations confirmées existantes
+                int totalSold = bookingRepository.countByTickets_TicketIdAndBookingStatus(
+                    rt.getTicketId(), BookingStatus.CONFIRMED).orElse(0);
+                
+                // Ajouter la quantité de la réservation actuelle
+                totalSold += rt.getQuantity();
+                
+                // Mettre à jour le nombre de billets vendus
+                ticket.setSoldQuantity(totalSold);
+                ticketRepository.save(ticket);
+            });
+        }
+        
+        booking = bookingRepository.save(booking);
+        System.out.println("=== DEBUG: La réservation a été confirmée avec succès");
         return booking;
+    }
+    
+    // Méthode de compatibilité pour l'ancien code
+    @Deprecated
+    @Transactional
+    public Booking confirmBooking(String bookingId) {
+        return confirmSingleBooking(bookingId);
+    }
+
+    @Transactional
+    public List<Booking> confirmBookingGroup(String bookingId) {
+        System.out.println("=== DEBUG: Confirming booking group for booking: " + bookingId);
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Réservation non trouvée"));
+
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
+            throw new BadRequestException("Impossible de confirmer une réservation annulée");
+        }
+
+        // Récupérer toutes les réservations du même groupe non annulées
+        List<Booking> groupBookings = bookingRepository.findByGroupIdAndBookingStatusNot(
+                booking.getGroupId(), BookingStatus.CANCELLED);
+
+        // Confirmer chaque réservation du groupe
+        List<Booking> confirmedBookings = new ArrayList<>();
+        for (Booking groupBooking : groupBookings) {
+            if (groupBooking.getBookingStatus() != BookingStatus.CONFIRMED) {
+                Booking confirmed = confirmSingleBooking(groupBooking.getBookingId());
+                confirmedBookings.add(confirmed);
+            } else {
+                confirmedBookings.add(groupBooking);
+            }
+        }
+
+        System.out.println("=== DEBUG: Toutes les réservations du groupe ont été confirmées avec succès");
+        return confirmedBookings;
     }
 
     public List<Booking> getBookingsForUser(String userId) {
@@ -158,13 +202,15 @@ public class BookingService {
 
         // Mettre à jour les quantités vendues si la réservation était confirmée
         if (booking.getBookingStatus() == BookingStatus.CONFIRMED) {
-            Booking.ReservedTicket rt = booking.getTickets().get(0);
-            Ticket ticket = ticketRepository.findById(rt.getTicketId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Ticket non trouvé: " + rt.getTicketId()));
-
-            int newSoldQuantity = Math.max(0, ticket.getSoldQuantity() - 1); // On décrémente de 1 car une réservation = 1 ticket
-            ticket.setSoldQuantity(newSoldQuantity);
-            ticketRepository.save(ticket);
+            for (Booking.ReservedTicket rt : booking.getTickets()) {
+                ticketRepository.findById(rt.getTicketId()).ifPresent(ticket -> {
+                    int newSoldQuantity = Math.max(0, ticket.getSoldQuantity() - rt.getQuantity());
+                    ticket.setSoldQuantity(newSoldQuantity);
+                    ticketRepository.save(ticket);
+                    System.out.println("=== DEBUG: Annulation - Mise à jour de soldQuantity pour le ticket " + 
+                                     rt.getTicketId() + ". Nouvelle valeur: " + newSoldQuantity);
+                });
+            }
         }
 
         // Mettre à jour le statut de la réservation
@@ -189,14 +235,16 @@ public class BookingService {
         for (Booking booking : bookings) {
             if (booking.getBookingStatus() != BookingStatus.CANCELLED) {
                 if (booking.getBookingStatus() == BookingStatus.CONFIRMED) {
-                    // Libérer les billets réservés
-                    Booking.ReservedTicket rt = booking.getTickets().get(0);
-                    Ticket ticket = ticketRepository.findById(rt.getTicketId())
-                            .orElseThrow(() -> new ResourceNotFoundException("Ticket non trouvé: " + rt.getTicketId()));
-
-                    int newSoldQuantity = Math.max(0, ticket.getSoldQuantity() - 1);
-                    ticket.setSoldQuantity(newSoldQuantity);
-                    ticketRepository.save(ticket);
+                    // Mettre à jour les quantités vendues pour chaque ticket de la réservation
+                    for (Booking.ReservedTicket rt : booking.getTickets()) {
+                        ticketRepository.findById(rt.getTicketId()).ifPresent(ticket -> {
+                            int newSoldQuantity = Math.max(0, ticket.getSoldQuantity() - rt.getQuantity());
+                            ticket.setSoldQuantity(newSoldQuantity);
+                            ticketRepository.save(ticket);
+                            System.out.println("=== DEBUG: Annulation groupe - Mise à jour de soldQuantity pour le ticket " + 
+                                             rt.getTicketId() + ". Nouvelle valeur: " + newSoldQuantity);
+                        });
+                    }
                 }
 
                 booking.setBookingStatus(BookingStatus.CANCELLED);
@@ -206,15 +254,68 @@ public class BookingService {
     }
 
     public Map<String, Object> getTicketStatus(String ticketId) {
+        System.out.println("=== DEBUG: Récupération du statut pour le ticket " + ticketId);
+        
+        // Récupérer le ticket
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new ResourceNotFoundException("Ticket non trouvé: " + ticketId));
 
-        int totalSold = bookingRepository.countSoldTicketsByTicketId(ticketId).orElse(0);
+        // Afficher l'état actuel du ticket
+        System.out.println("=== DEBUG: État actuel du ticket - Type: " + ticket.getTicketType() + 
+                         ", Vendu: " + ticket.getSoldQuantity() + "/" + ticket.getInitialQuantity());
 
+        // Récupérer toutes les réservations confirmées
+        List<Booking> allConfirmedBookings = bookingRepository.findByBookingStatus(BookingStatus.CONFIRMED);
+        
+        // Filtrer pour ne garder que les réservations contenant le ticketId
+        List<Booking> confirmedBookings = allConfirmedBookings.stream()
+                .filter(booking -> booking.getTickets().stream()
+                        .anyMatch(t -> t.getTicketId().equals(ticketId)))
+                .collect(Collectors.toList());
+                
+        System.out.println("=== DEBUG: Nombre de réservations confirmées trouvées: " + confirmedBookings.size());
+        
+        // Calculer le nombre total de billets vendus
+        int totalSold = confirmedBookings.stream()
+                .flatMap(booking -> booking.getTickets().stream())
+                .filter(t -> t.getTicketId().equals(ticketId))
+                .mapToInt(Booking.ReservedTicket::getQuantity)
+                .sum();
+
+        System.out.println("=== DEBUG: Quantité totale vendue calculée: " + totalSold);
+
+        // Mettre à jour la quantité vendue dans le ticket
+        System.out.println("=== DEBUG: Avant mise à jour - soldQuantity: " + ticket.getSoldQuantity() + ", totalSold: " + totalSold);
+        
+        // S'assurer que la quantité vendue ne dépasse pas la quantité initiale
+        if (totalSold > ticket.getInitialQuantity()) {
+            System.out.println("=== ATTENTION: La quantité vendue (" + totalSold + ") dépasse la quantité initiale (" + ticket.getInitialQuantity() + ")");
+            totalSold = ticket.getInitialQuantity();
+        }
+        
+        ticket.setSoldQuantity(totalSold);
+        
+        try {
+            Ticket updatedTicket = ticketRepository.save(ticket);
+            System.out.println("=== DEBUG: Après save() - ID du ticket mis à jour: " + updatedTicket.getTicketId());
+            System.out.println("=== DEBUG: Ticket mis à jour - Vendu: " + updatedTicket.getSoldQuantity() + "/" + updatedTicket.getInitialQuantity());
+            
+            // Vérifier si la mise à jour a été appliquée en rechargeant le ticket
+            Ticket verifiedTicket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket non trouvé après mise à jour: " + ticketId));
+            System.out.println("=== VÉRIFICATION: Quantité vendue après rechargement: " + verifiedTicket.getSoldQuantity());
+            
+        } catch (Exception e) {
+            System.err.println("=== ERREUR lors de la mise à jour du ticket: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        // Retourner les informations
         Map<String, Object> status = new HashMap<>();
         status.put("ticketId", ticketId);
+        status.put("ticketType", ticket.getTicketType());
         status.put("initialQuantity", ticket.getInitialQuantity());
-        status.put("soldQuantity", totalSold); // Utiliser le comptage réel
+        status.put("soldQuantity", totalSold);
         status.put("available", ticket.getInitialQuantity() - totalSold);
 
         return status;

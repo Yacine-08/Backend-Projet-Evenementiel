@@ -4,6 +4,7 @@ import dic1.projet.trans.backend.entities.Booking;
 import dic1.projet.trans.backend.enums.BookingStatus;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Aggregation;
+import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -46,6 +47,16 @@ public interface BookingRepository extends MongoRepository<Booking, String> {
     })
     Double calculateTotalRevenueByEventId(String eventId);
 
+    @Query("{'tickets': {$elemMatch: {'ticketId': ?0}}, 'bookingStatus': ?1}")
+    List<Booking> findByTicketIdAndBookingStatus(String ticketId, BookingStatus status);
+    
+    @Aggregation(pipeline = {
+            "{$match: {bookingStatus: ?1, 'tickets.ticketId': ?0}}",
+            "{$group: {_id: '$_id'}}",
+            "{$count: 'count'}"
+    })
+    Optional<Integer> countByTickets_TicketIdAndBookingStatus(String ticketId, BookingStatus status);
+    
     @Aggregation(pipeline = {
             "{$unwind: '$tickets'}",
             "{$match: {'tickets.ticketId': ?0, bookingStatus: 'CONFIRMED'}}",
@@ -56,4 +67,21 @@ public interface BookingRepository extends MongoRepository<Booking, String> {
     List<Booking> findByGroupId(String groupId);
 
     List<Booking> findByClientIdOrderByBookingDateDesc(String clientId);
+    
+    List<Booking> findByBookingStatus(BookingStatus status);
+    
+    // Interface pour le résultat de l'agrégation des ventes de billets
+    interface TicketSales {
+        String getTicketId();
+        Integer getTotalSold();
+    }
+    
+    @Aggregation(pipeline = {
+        "{$match: {bookingStatus: 'CONFIRMED'}}",
+        "{$unwind: '$tickets'}",
+        "{$group: {_id: '$tickets.ticketId', totalSold: {$sum: '$tickets.quantity'}}}"
+    })
+    List<TicketSales> findConfirmedTicketsCount();
+
+    List<Booking> findByGroupIdAndBookingStatusNot(String groupId, BookingStatus status);
 }
