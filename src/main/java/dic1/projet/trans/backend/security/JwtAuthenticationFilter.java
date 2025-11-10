@@ -36,12 +36,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
 
         String path = request.getRequestURI();
+        String method = request.getMethod();
+        
+        // Chemins qui ne nécessitent pas d'authentification
         if (path.startsWith("/api/auth/") ||
-                path.startsWith("/api/events/events") ||
-                path.startsWith("/swagger-ui/") ||
-                path.startsWith("/v3/api-docs") ||
-                path.startsWith("/api/events/search/") ||
-                path.startsWith("/api/events/{eventId}")) {
+            path.startsWith("/swagger-ui/") ||
+            path.startsWith("/v3/api-docs") ||
+            path.equals("/api/events/events") ||
+            path.startsWith("/api/events/search") ||
+            (path.matches("/api/events/.*") && method.equals("GET"))) {
             filterChain.doFilter(request, response);
             return;
         }

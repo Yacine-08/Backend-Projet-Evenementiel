@@ -20,6 +20,8 @@ public interface BookingRepository extends MongoRepository<Booking, String> {
     Long countBookingsByEventId(String eventId);
     List<Booking> findByClientId(String clientId);
     
+    List<Booking> findByEventId(String eventId);
+    
     List<Booking> findByEventIdAndBookingStatus(String eventId, BookingStatus status);
     
     @Aggregation(pipeline = {
