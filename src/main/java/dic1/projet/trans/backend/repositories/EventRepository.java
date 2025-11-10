@@ -2,10 +2,13 @@ package dic1.projet.trans.backend.repositories;
 
 import dic1.projet.trans.backend.entities.Event;
 import dic1.projet.trans.backend.enums.EventStatus;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Sort.Direction;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 
 public interface EventRepository extends MongoRepository<Event, String> {
@@ -40,4 +43,6 @@ public interface EventRepository extends MongoRepository<Event, String> {
 
     List<Event> findByOrganizerIdUser(String organizerId);
 
+    @Query(value = "{ 'eventStatus': 'PUBLISHED', 'dateTimeStart': { $gte: ?0 } }", sort = "{ 'dateTimeStart': -1 }")
+    List<Event> findAllAvailableEvents(LocalDateTime currentDate);
 }

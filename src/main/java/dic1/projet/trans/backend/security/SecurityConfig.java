@@ -52,7 +52,10 @@ public class SecurityConfig {
                             "/swagger-ui.html",
                             "/swagger-ui/**",
                             "/swagger-resources/**",
-                            "/webjars/**"
+                            "/webjars/**",
+                            "/api/events/events",
+                            "/api/events/search/**",
+                            "/api/events/{eventId}"
                     ).permitAll()
 
                     // Points d'entrée d'authentification
@@ -61,12 +64,6 @@ public class SecurityConfig {
                     ).permitAll()
 
                     // Points d'entrée publics
-                    .requestMatchers(
-                            "/api/events/search",
-                            "/api/events/search/**",
-                            "/api/events/{eventId}",
-                            "/api/events/events"
-                    ).permitAll()
 
                     // Points d'entrée nécessitant une authentification
                     .requestMatchers("/current-user").authenticated()

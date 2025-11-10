@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
 
 import java.text.Normalizer;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -381,8 +382,8 @@ public class EventService {
 
 
 
-    public List<Event> getAllEvents() {
-        return eventRepository.findAll();
+    public List<Event> getAllAvailableEvents() {
+        return eventRepository.findAllAvailableEvents(LocalDateTime.now());
     }
 
 

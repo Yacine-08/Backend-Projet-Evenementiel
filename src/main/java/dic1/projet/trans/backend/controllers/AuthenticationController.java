@@ -224,7 +224,7 @@ public class AuthenticationController {
         try {
             // Récupérer l'utilisateur connecté
             String currentUsername = authentication.getName();
-            
+
             // Trouver l'utilisateur par son nom d'utilisateur (username)
             User currentUser = authenticationService.findByUsername(currentUsername)
                     .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé avec le nom d'utilisateur: " + currentUsername));
@@ -284,15 +284,18 @@ public class AuthenticationController {
                             "Ce nom d'utilisateur est déjà utilisé"
                     );
                 }
-                currentUser.setUsername((String) updates.get("newUsername"));
+                currentUser.setUsername(newUsername);
             }
 
             if (updates.containsKey("profilePhoto") && updates.get("profilePhoto") != null) {
-                currentUser.setEmail((String) updates.get("profilePhoto"));
+                currentUser.setProfilePhoto((String) updates.get("profilePhoto"));
             }
 
             if (updates.containsKey("roles") && updates.get("roles") != null) {
-                currentUser.setEmail((String) updates.get("roles"));
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "La modification des rôles n'est pas autorisée via cette méthode"
+                );
             }
 
             

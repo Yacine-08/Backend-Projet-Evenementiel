@@ -155,7 +155,7 @@ public class EventController {
 
     @GetMapping("/events")
     public ResponseEntity<List<Event>> getAllEvents() {
-        return ResponseEntity.ok(eventService.getAllEvents());
+        return ResponseEntity.ok(eventService.getAllAvailableEvents());
     }
 
     @GetMapping("/search")
