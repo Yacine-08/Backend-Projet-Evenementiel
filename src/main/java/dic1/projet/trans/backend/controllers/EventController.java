@@ -157,14 +157,57 @@ public class EventController {
     @Operation(summary = "Récupérer les événements (Organisateur)")
     @GetMapping("/my-events")
     public ResponseEntity<?> getMyEvents(Authentication authentication) {
-        User currentUser = authenticationService.getCurrentUser(authentication);
+        try {
+            // Debug: Log authentication object
+            System.out.println("=== DEBUG [getMyEvents]: Authentication object: " + authentication);
+            if (authentication != null) {
+                System.out.println("=== DEBUG [getMyEvents]: Principal: " + authentication.getPrincipal());
+                System.out.println("=== DEBUG [getMyEvents]: Authorities: " + authentication.getAuthorities());
+                System.out.println("=== DEBUG [getMyEvents]: Is authenticated: " + authentication.isAuthenticated());
+            } else {
+                System.out.println("=== DEBUG [getMyEvents]: Authentication is NULL");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of(
+                            "success", false,
+                            "error", "Non authentifié",
+                            "details", "Aucun utilisateur connecté"
+                        ));
+            }
 
-        if (!currentUser.getRoles().contains(Role.ORGANIZER)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Accessible uniquement aux organisateurs"));
+            User currentUser = authenticationService.getCurrentUser(authentication);
+            System.out.println("=== DEBUG [getMyEvents]: Current user: " + (currentUser != null ? currentUser.getUsername() : "null"));
+            System.out.println("=== DEBUG [getMyEvents]: User roles: " + (currentUser != null ? currentUser.getRoles() : "null"));
+
+            if (currentUser == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of(
+                            "success", false,
+                            "error", "Utilisateur non trouvé",
+                            "details", "Impossible de récupérer les informations de l'utilisateur"
+                        ));
+            }
+
+            if (!currentUser.getRoles().contains(Role.ORGANIZER)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of(
+                            "success", false,
+                            "error", "Accès refusé",
+                            "details", "Cette fonctionnalité est réservée aux organisateurs"
+                        ));
+            }
+
+            return ResponseEntity.ok(eventService.getEventsByOrganizer(currentUser.getIdUser()));
+        } catch (Exception e) {
+            System.err.println("=== ERROR in getMyEvents: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                        "success", false,
+                        "error", "Erreur interne du serveur",
+                        "details", e.getMessage(),
+                        "timestamp", java.time.LocalDateTime.now().toString()
+                    ));
         }
-
-        return ResponseEntity.ok(eventService.getEventsByOrganizer(currentUser.getIdUser()));
     }
 
     @GetMapping("/events")

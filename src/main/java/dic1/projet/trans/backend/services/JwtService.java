@@ -11,6 +11,9 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
@@ -19,6 +22,7 @@ import java.util.function.Function;
 
 @Service
 public class JwtService {
+    private static final Logger logger = LoggerFactory.getLogger(JwtService.class);
 
     @Value("${jwt.secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}")
     private String secretKey;
@@ -56,12 +60,33 @@ public class JwtService {
 
     // verify if the username corresponds to the username extracted from the token and if the token is not expired
     public boolean isTokenValid(String token, UserDetails userDetails) {
-        final String username = extractUsername(token);
-        return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+        try {
+            logger.info("Validating token for user: " + userDetails.getUsername());
+            final String username = extractUsername(token);
+            logger.info("Extracted username from token: " + username);
+            
+            boolean usernameMatches = username.equals(userDetails.getUsername());
+            boolean tokenExpired = isTokenExpired(token);
+            
+            logger.info("Token validation results - Username matches: " + usernameMatches + ", Token expired: " + tokenExpired);
+            
+            return usernameMatches && !tokenExpired;
+        } catch (Exception e) {
+            logger.error("Error validating token: " + e.getMessage(), e);
+            return false;
+        }
     }
 
     private boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
+        try {
+            Date expiration = extractExpiration(token);
+            boolean expired = expiration.before(new Date());
+            logger.info("Token expiration check - Expiration: " + expiration + ", Current time: " + new Date() + ", Expired: " + expired);
+            return expired;
+        } catch (Exception e) {
+            logger.error("Error checking token expiration: " + e.getMessage(), e);
+            return true; // If we can't verify, treat as expired
+        }
     }
 
     private Date extractExpiration(String token) {

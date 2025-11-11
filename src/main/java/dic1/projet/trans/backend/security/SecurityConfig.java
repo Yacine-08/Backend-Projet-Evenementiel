@@ -26,7 +26,6 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Optional;
-import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -43,68 +42,44 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
                 .authorizeHttpRequests(auth -> auth
+                        // OPTIONS requests (preflight CORS)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                    // Swagger UI & OpenAPI docs
-                    .requestMatchers(
-                            "/v3/api-docs/**",
-                            "/swagger-ui.html",
-                            "/swagger-ui/**",
-                            "/swagger-resources/**",
-                            "/webjars/**"
-                    ).permitAll()
-                    
-                    // Authentication endpoints
-                    .requestMatchers(
-                            "/api/auth/**"
-                    ).permitAll()
+                        // Swagger UI & OpenAPI docs
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/swagger-resources/**",
+                                "/webjars/**"
+                        ).permitAll()
 
-                    // Public event endpoints
-                    .requestMatchers(
-                            "/api/events/events",
-                            "/api/events/search/**",
-                            "/api/events/{eventId}",
-                            "/api/events/{eventId}/details"
-                    ).permitAll()
+                        // Authentication endpoints
+                        .requestMatchers("/api/auth/**").permitAll()
 
-                    // Organizer endpoints
-                    .requestMatchers(
-                        "/api/events/my-events",
-                        "/api/organizer/**"
-                    ).hasAnyRole("ORGANIZER", "ADMINISTRATOR")
-                    
-                    // Event statistics endpoints - requiring authentication
-                    .requestMatchers(
-                        "/api/events/*/revenue",
-                        "/api/events/*/potential-revenue",
-                        "/api/events/*/booking-count"
-                    ).authenticated()
-                    
-                    // Admin endpoints
-                    .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
-                    
-                    // Authenticated user endpoints
-                    .requestMatchers("/current-user").authenticated()
-                    
-                    // All other event endpoints require authentication
-                    .requestMatchers("/api/events/**").authenticated()
-                    
-                    // Points d'entrée authentifiés
-                    .requestMatchers(
-                            "/api/favorites/**",
-                            "/api/notifications/**"
-                    ).authenticated()
+                        // Public event endpoints (GET only)
+                        .requestMatchers(HttpMethod.GET, "/api/events/events").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/events/search/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/events/{eventId}").permitAll()
 
-                    // Toutes les autres requêtes nécessitent une authentification
-                    .anyRequest().authenticated()
-            )
-            // Configuration de la gestion de session
-            .sessionManagement(session -> session
-                    .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            )
-            // Ajout du filtre JWT avant le filtre d'authentification par nom d'utilisateur/mot de passe
-            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+                        // Protected event endpoints - require authentication
+                        .requestMatchers("/api/events/my-events").authenticated()
+                        .requestMatchers("/api/events/create").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/events/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/events/**").authenticated()
+                        .requestMatchers("/api/events/*/booking-count").authenticated()
+                        .requestMatchers("/api/events/*/revenue").authenticated()
+                        .requestMatchers("/api/events/*/potential-revenue").authenticated()
+
+                        // All other endpoints require authentication
+                        .anyRequest().authenticated()
+                )
+                .authenticationProvider(authenticationProvider())
+                .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -120,21 +95,21 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         // Autoriser les en-têtes nécessaires
         config.setAllowedHeaders(List.of(
-            "Authorization", 
-            "Content-Type", 
-            "X-Requested-With", 
-            "Accept", 
-            "Origin",
-            "Access-Control-Allow-Headers",
-            "Access-Control-Request-Method",
-            "Access-Control-Request-Headers"
+                "Authorization",
+                "Content-Type",
+                "X-Requested-With",
+                "Accept",
+                "Origin",
+                "Access-Control-Allow-Headers",
+                "Access-Control-Request-Method",
+                "Access-Control-Request-Headers"
         ));
         // Exposer les en-têtes personnalisés
         config.setExposedHeaders(List.of(
-            "Authorization", 
-            "Content-Disposition",
-            "Access-Control-Allow-Origin",
-            "Access-Control-Allow-Credentials"
+                "Authorization",
+                "Content-Disposition",
+                "Access-Control-Allow-Origin",
+                "Access-Control-Allow-Credentials"
         ));
         // Durée de vie de la configuration CORS en secondes (1 heure)
         config.setMaxAge(3600L);
@@ -161,51 +136,63 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
-    
+
     @Bean
     public UserDetailsService userDetailsService() {
         return username -> {
-            Optional<User> userByUsername = userRepository.findByUsername(username);
-            if (userByUsername.isPresent()) {
-                return userByUsername.get();
+            System.out.println("=== UserDetailsService: Loading user: " + username);
+
+            // First try to find by username, email, or phone number
+            Optional<User> userOptional = userRepository.findByUsernameOrEmailOrPhoneNumber(username, username, username);
+            if (userOptional.isPresent()) {
+                User user = userOptional.get();
+                System.out.println("=== UserDetailsService: User found: " + user.getUsername() + ", Roles: " + user.getRoles());
+                return org.springframework.security.core.userdetails.User
+                        .withUsername(user.getUsername())
+                        .password(user.getPassword())
+                        .roles(user.getRoles().stream().map(Enum::name).toArray(String[]::new))
+                        .build();
             }
 
+            // If not found, try more specific lookups
             if (username.contains("@")) {
-                return userRepository.findByEmail(username)
-                        .orElseThrow(() -> new UsernameNotFoundException("Aucun compte trouvé avec cet email: " + username));
-            }
-
-            if (username.matches(".*\\d.*")) { // Si la chaîne contient des chiffres
-                // Essayer différents formats de numéro de téléphone
+                userOptional = userRepository.findByEmail(username);
+            } else if (username.matches(".*\\d.*")) {
+                // Try different phone number formats
                 String[] possibleFormats = {
-                    username, // Format original
-                    username.replaceAll("\\s+", ""), // Sans espaces
-                    username.replaceAll("\\D+", ""), // Uniquement les chiffres
-                    username.replaceAll("^\\+221", "").replaceAll("\\s+", ""), // Sans +221 et sans espaces
-                    "221" + username.replaceAll("\\D+", ""), // Avec préfixe 221
-                    "+" + username.replaceAll("\\D+", ""), // Avec préfixe +
-                    "221" + username // Format simple avec 221
+                        username, // Original format
+                        username.replaceAll("\\s+", ""), // Without spaces
+                        username.replaceAll("\\D+", ""), // Numbers only
+                        username.replaceAll("^\\+221", "").replaceAll("\\s+", ""), // Without +221 and spaces
+                        "221" + username.replaceAll("\\D+", ""), // With 221 prefix
+                        "+" + username.replaceAll("\\D+", ""), // With + prefix
+                        "221" + username // Simple format with 221
                 };
 
                 for (String phoneNumber : possibleFormats) {
                     if (phoneNumber == null || phoneNumber.trim().isEmpty()) continue;
-                    
-                    Optional<User> userOpt = userRepository.findByPhoneNumber(phoneNumber);
-                    if (userOpt.isPresent()) {
-                        return userOpt.get();
-                    }
+                    userOptional = userRepository.findByPhoneNumber(phoneNumber);
+                    if (userOptional.isPresent()) break;
                 }
             }
 
+            if (userOptional.isPresent()) {
+                User user = userOptional.get();
+                System.out.println("=== UserDetailsService: User found (alternative lookup): " + user.getUsername() + ", Roles: " + user.getRoles());
+                return org.springframework.security.core.userdetails.User
+                        .withUsername(user.getUsername())
+                        .password(user.getPassword())
+                        .roles(user.getRoles().stream().map(Enum::name).toArray(String[]::new))
+                        .build();
+            }
+
+            System.out.println("=== UserDetailsService: User NOT found: " + username);
             throw new UsernameNotFoundException("Aucun compte trouvé avec cet identifiant: " + username);
         };
     }
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService);
-        filter.setUserDetailsService(userDetailsService());
-        return filter;
+        return new JwtAuthenticationFilter(jwtService, userDetailsService());
     }
-    
 }
