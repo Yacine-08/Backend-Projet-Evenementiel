@@ -152,11 +152,9 @@ public class SecurityConfig {
             if (userOptional.isPresent()) {
                 User user = userOptional.get();
                 System.out.println("=== UserDetailsService: User found: " + user.getUsername() + ", Roles: " + user.getRoles());
-                return org.springframework.security.core.userdetails.User
-                        .withUsername(user.getUsername())
-                        .password(user.getPassword())
-                        .roles(user.getRoles().stream().map(Enum::name).toArray(String[]::new))
-                        .build();
+                
+                // Return our custom User object that implements UserDetails
+                return user;
             }
 
             // If not found, try more specific lookups
@@ -184,11 +182,9 @@ public class SecurityConfig {
             if (userOptional.isPresent()) {
                 User user = userOptional.get();
                 System.out.println("=== UserDetailsService: User found (alternative lookup): " + user.getUsername() + ", Roles: " + user.getRoles());
-                return org.springframework.security.core.userdetails.User
-                        .withUsername(user.getUsername())
-                        .password(user.getPassword())
-                        .roles(user.getRoles().stream().map(Enum::name).toArray(String[]::new))
-                        .build();
+                
+                // Return our custom User object that implements UserDetails
+                return user;
             }
 
             System.out.println("=== UserDetailsService: User NOT found: " + username);

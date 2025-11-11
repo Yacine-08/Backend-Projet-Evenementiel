@@ -45,6 +45,32 @@ public class AuthenticationService {
     private final EmailService emailService;
     private final SmsService smsService;
 
+    @Transactional
+    public boolean makeUserOrganizer(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé"));
+
+        if (!user.getRoles().contains(Role.ORGANIZER)) {
+            user.getRoles().add(Role.ORGANIZER);
+            userRepository.save(user);
+            return true;
+        }
+        return false;
+    }
+
+    @Transactional
+    public boolean makeUserClient(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé"));
+
+        if (!user.getRoles().contains(Role.CLIENT)) {
+            user.getRoles().add(Role.CLIENT);
+            userRepository.save(user);
+            return true;
+        }
+        return false;
+    }
+
 
     @Transactional
     public AuthenticationResponse register(RegisterRequest request) {
@@ -151,7 +177,7 @@ public class AuthenticationService {
                 throw new BadRequestException("Compte non vérifié. Veuillez vérifier votre email ou votre téléphone pour activer votre compte.");
             }
 
-            // Vérifier le mot de passe
+            // Vérifier le mot de passe manuellement
             if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
                 throw new BadCredentialsException("Mot de passe incorrect");
             }
@@ -169,12 +195,12 @@ public class AuthenticationService {
         } catch (UsernameNotFoundException e) {
             throw new UsernameNotFoundException("Aucun compte trouvé avec cet identifiant");
         } catch (BadRequestException e) {
-            throw e; // On laisse passer les BadRequestException telles quelles
+            throw e;
         } catch (Exception e) {
             // Log l'erreur pour le débogage
             System.err.println("Erreur lors de l'authentification: " + e.getMessage());
             e.printStackTrace();
-            throw new RuntimeException("Erreur lors de l'authentification: " + e.getMessage(), e);
+            throw new BadRequestException("Erreur lors de l'authentification: " + e.getMessage());
         }
     }
 

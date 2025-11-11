@@ -97,14 +97,46 @@ public class EmailService {
             helper.setFrom(fromEmail);
             helper.setTo(to);
             helper.setSubject("Bienvenue sur EventLoop");
-
             String htmlContent = buildWelcomeEmailTemplate(firstName);
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
         } catch (MessagingException e) {
-            throw new RuntimeException("Erreur lors de l'envoi de l'email", e);
+            throw new RuntimeException("Erreur lors de l'envoi de l'email de bienvenue", e);
         }
     }
 
+    // booking confirmation email
+    public void sendBookingConfirmationEmail(String to, String firstName, String eventName, String bookingId, boolean isGroup, int bookingCount) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(to);
+            helper.setSubject("Confirmation de votre réservation - EventLoop");
+
+            String bookingDetails;
+            if (isGroup) {
+                bookingDetails = String.format("Vous avez effectué %d réservations pour l'événement : %s", bookingCount, eventName);
+            } else {
+                bookingDetails = String.format("Vous avez effectué une réservation pour l'événement : %s", eventName);
+            }
+
+            String htmlContent = "<html><body>" +
+                    "<h2>Confirmation de réservation</h2>" +
+                    "<p>Bonjour " + firstName + ",</p>" +
+                    "<p>" + bookingDetails + "</p>" +
+                    "<p>Numéro de réservation : " + bookingId + "</p>" +
+                    "<p>Vous pouvez consulter les détails de votre réservation dans votre espace personnel.</p>" +
+                    "<p>Cordialement,<br>L'équipe EventLoop</p>" +
+                    "</body></html>";
+
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            throw new RuntimeException("Erreur lors de l'envoi de l'email de confirmation de réservation", e);
+        }
+    }
 }

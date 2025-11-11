@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -31,6 +32,57 @@ import java.util.stream.Collectors;
 public class AuthenticationController {
 
     private final AuthenticationService authenticationService;
+
+    @PostMapping("/{userId}/make-organizer")
+    @Operation(summary = "Promouvoir un utilisateur en tant qu'organisateur", 
+               description = "Ajoute le rôle d'organisateur à un utilisateur existant (réservé aux administrateurs)")
+    public ResponseEntity<?> makeUserOrganizer(@PathVariable String userId) {
+        try {
+            boolean isNowOrganizer = authenticationService.makeUserOrganizer(userId);
+            if (isNowOrganizer) {
+                return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "L'utilisateur est maintenant un organisateur"
+                ));
+            } else {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "L'utilisateur est déjà un organisateur"
+                ));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
+        }
+    }
+
+    @PostMapping("/{userId}/make-client")
+    @Operation(summary = "Promouvoir un utilisateur en tant que client",
+               description = "Ajoute le rôle client à un utilisateur existant")
+    public ResponseEntity<?> makeUserClient(@PathVariable String userId) {
+        try {
+            boolean isNowClient = authenticationService.makeUserClient(userId);
+            if (isNowClient) {
+                return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "L'utilisateur est maintenant un client"
+                ));
+            } else {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "L'utilisateur est déjà un client"
+                ));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
+        }
+    }
+
 
     @PostMapping("/register")
     @Operation(summary = "Inscription d'un utilisateur", description = "Crée un compte utilisateur et envoie un code OTP pour activer le compte.")

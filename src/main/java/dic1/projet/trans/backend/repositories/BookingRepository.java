@@ -48,6 +48,9 @@ public interface BookingRepository extends MongoRepository<Booking, String> {
         "}}"
     })
     Double calculateTotalRevenueByEventId(String eventId);
+    
+    // Trouver la première réservation d'un groupe
+    Optional<Booking> findFirstByGroupId(String groupId);
 
     @Query("{'tickets': {$elemMatch: {'ticketId': ?0}}, 'bookingStatus': ?1}")
     List<Booking> findByTicketIdAndBookingStatus(String ticketId, BookingStatus status);

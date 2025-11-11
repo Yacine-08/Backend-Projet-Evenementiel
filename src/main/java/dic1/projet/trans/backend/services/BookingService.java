@@ -172,21 +172,25 @@ public class BookingService {
         System.out.println("=== DEBUG: Toutes les réservations du groupe ont été confirmées avec succès");
         return confirmedBookings;
     }
-
     public List<Booking> getBookingsForUser(String userId) {
         // Retourne directement la liste des réservations triées par date décroissante
         return bookingRepository.findByClientIdOrderByBookingDateDesc(userId);
     }
 
-    public Booking getBookingByIdOwned(String bookingId, String userId) {
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Réservation non trouvée"));
-        if (!booking.getClientId().equals(userId)) {
-            throw new BadRequestException("Vous n'êtes pas propriétaire de cette réservation");
-        }
-        return booking;
+    public Optional<Booking> getBookingByIdOwned(String bookingId, String userId) {
+        return bookingRepository.findById(bookingId)
+                .filter(booking -> booking.getClientId().equals(userId));
     }
-
+    
+    /**
+     * Récupère la première réservation d'un groupe
+     * @param groupId L'ID du groupe
+     * @return La première réservation du groupe si elle existe
+     */
+    public Optional<Booking> getFirstBookingByGroupId(String groupId) {
+        return bookingRepository.findFirstByGroupId(groupId);
+    }
+    
     @Transactional
     public Booking cancelBooking(String bookingId, String userId) {
         Booking booking = bookingRepository.findById(bookingId)

@@ -423,6 +423,31 @@ public class NotificationService {
                     notification.setGroupId(groupId);
                     notification.setMetadata(metadata != null ? metadata : Map.of());
                     notification.setActionUrl(actionUrl);
+                    
+                    // Envoyer un email pour les confirmations de réservation
+                    if (type == NotificationType.BOOKING_CONFIRMATION && recipient.getEmail() != null) {
+                        try {
+                            String eventName = metadata != null ? metadata.get("eventName") : "un événement";
+                            String bookingId = metadata != null ? metadata.get("bookingId") : "";
+                            boolean isGroup = metadata != null && "true".equals(metadata.get("isGroup"));
+                            int bookingCount = metadata != null && metadata.containsKey("bookingCount") 
+                                    ? Integer.parseInt(metadata.get("bookingCount")) 
+                                    : 1;
+                                    
+                            emailService.sendBookingConfirmationEmail(
+                                recipient.getEmail(),
+                                recipient.getFirstName(),
+                                eventName,
+                                bookingId,
+                                isGroup,
+                                bookingCount
+                            );
+                        } catch (Exception e) {
+                            // Log l'erreur mais ne pas interrompre le processus
+                            System.err.println("Erreur lors de l'envoi de l'email de confirmation: " + e.getMessage());
+                        }
+                    }
+                    
                     return notification;
                 })
                 .collect(Collectors.toList());
