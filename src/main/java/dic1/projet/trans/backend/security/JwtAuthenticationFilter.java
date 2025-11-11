@@ -38,13 +38,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String method = request.getMethod();
         
-        // Chemins qui ne nécessitent pas d'authentification
-        if (path.startsWith("/api/auth/") ||
-            path.startsWith("/swagger-ui/") ||
-            path.startsWith("/v3/api-docs") ||
-            path.equals("/api/events/events") ||
-            path.startsWith("/api/events/search") ||
-            (path.matches("/api/events/.*") && method.equals("GET"))) {
+        // Chemins publics qui ne nécessitent pas d'authentification
+        boolean isPublicAuthEndpoint =
+                path.equals("/api/auth/login") ||
+                path.equals("/api/auth/register") ||
+                path.equals("/api/auth/verify-otp") ||
+                path.equals("/api/auth/resend-otp") ||
+                path.equals("/api/auth/forgot-password") ||
+                path.equals("/api/auth/reset-password");
+
+        boolean isPublicPath =
+                isPublicAuthEndpoint ||
+                path.startsWith("/swagger-ui/") ||
+                path.startsWith("/v3/api-docs") ||
+                path.equals("/api/events/events") ||
+                path.startsWith("/api/events/search") ||
+                (path.matches("/api/events/.*") && method.equals("GET"));
+
+        if (isPublicPath) {
             filterChain.doFilter(request, response);
             return;
         }

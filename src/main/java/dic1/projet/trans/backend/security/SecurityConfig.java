@@ -171,7 +171,8 @@ public class SecurityConfig {
             }
 
             if (username.contains("@")) {
-                return userRepository.findByEmail(username)
+                String normalizedEmail = username.trim().toLowerCase();
+                return userRepository.findByEmailIgnoreCase(normalizedEmail)
                         .orElseThrow(() -> new UsernameNotFoundException("Aucun compte trouvé avec cet email: " + username));
             }
 

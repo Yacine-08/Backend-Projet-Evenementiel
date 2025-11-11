@@ -48,17 +48,19 @@ public class AuthenticationService {
 
     @Transactional
     public AuthenticationResponse register(RegisterRequest request) {
-
-        // Vérifier si l'email est fourni AVANT de vérifier s'il existe
+        // Normaliser email et téléphone et vérifier l'unicité
+        String normalizedEmail = null;
         if (request.getEmail() != null && !request.getEmail().isBlank()) {
-            if (userRepository.existsByEmail(request.getEmail())) {
+            normalizedEmail = request.getEmail().trim().toLowerCase();
+            if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
                 throw new BadRequestException("Cet email est déjà utilisé");
             }
         }
 
-        // Vérifier si le numéro de téléphone est fourni AVANT de vérifier s'il existe
+        String normalizedPhone = null;
         if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()) {
-            if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            normalizedPhone = PhoneNumberUtils.normalizePhoneNumber(request.getPhoneNumber());
+            if (userRepository.existsByPhoneNumber(normalizedPhone)) {
                 throw new BadRequestException("Ce numéro de téléphone est déjà utilisé");
             }
         }
@@ -91,8 +93,8 @@ public class AuthenticationService {
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
                 .username(request.getUsername())
-                .email(request.getEmail())
-                .phoneNumber(request.getPhoneNumber())
+                .email(normalizedEmail)
+                .phoneNumber(normalizedPhone)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .roles(roles)
                 .profilePhoto(request.getProfilePicture())
@@ -134,50 +136,34 @@ public class AuthenticationService {
         }
 
         try {
-            User user;
-            String identifier;
-            
-            if (hasEmail) {
-                // Connexion par email
-                user = userRepository.findByEmail(request.getEmail())
-                        .orElseThrow(() -> new UsernameNotFoundException("Aucun compte trouvé avec cet email"));
-                identifier = request.getEmail();
-            } else {
-                // Connexion par téléphone - on utilise la même normalisation que dans CustomUserDetailsService
-                String normalizedPhoneNumber = PhoneNumberUtils.normalizePhoneNumber(request.getPhoneNumber());
-                user = userRepository.findByPhoneNumber(normalizedPhoneNumber)
-                        .orElseThrow(() -> new UsernameNotFoundException("Aucun compte trouvé avec ce numéro de téléphone"));
-                identifier = user.getPhoneNumber(); // On utilise le numéro tel qu'il est stocké en base
-            }
+            String identifier = hasEmail
+                    ? request.getEmail().trim().toLowerCase()
+                    : PhoneNumberUtils.normalizePhoneNumber(request.getPhoneNumber());
 
-            // Vérifier si le compte est vérifié
+            Authentication auth = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                    identifier,
+                    request.getPassword()
+                )
+            );
+
+            User user = (User) auth.getPrincipal();
+
             if (!user.isEnabled()) {
                 throw new BadRequestException("Compte non vérifié. Veuillez vérifier votre email ou votre téléphone.");
             }
 
-            // Authentifier l'utilisateur
-            try {
-                authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                        identifier,
-                        request.getPassword()
-                    )
-                );
-            } catch (BadCredentialsException e) {
-                throw new BadCredentialsException("Mot de passe incorrect");
-            }
-
-
-            // Generate JWT token
             String jwtToken = jwtService.generateToken(user);
-            
+
             return AuthenticationResponse.builder()
                     .token(jwtToken)
                     .user(mapToUserDto(user))
                     .build();
 
         } catch (BadCredentialsException e) {
-            throw new BadCredentialsException("Identifiants invalides");
+            throw new BadCredentialsException("Identifiants invalides ou mot de passe incorrect");
+        } catch (UsernameNotFoundException e) {
+            throw new UsernameNotFoundException("Aucun compte trouvé avec cet identifiant");
         } catch (Exception e) {
             throw new RuntimeException("Erreur lors de l'authentification", e);
         }
@@ -189,10 +175,12 @@ public class AuthenticationService {
         User user;
 
         if (request.getEmail() != null && !request.getEmail().isBlank()) {
-            user = userRepository.findByEmail(request.getEmail())
+            String email = request.getEmail().trim().toLowerCase();
+            user = userRepository.findByEmailIgnoreCase(email)
                     .orElseThrow(() -> new ResourceNotFoundException("Aucun compte avec cet email"));
         } else if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()) {
-            user = userRepository.findByPhoneNumber(request.getPhoneNumber())
+            String phone = PhoneNumberUtils.normalizePhoneNumber(request.getPhoneNumber());
+            user = userRepository.findByPhoneNumber(phone)
                     .orElseThrow(() -> new ResourceNotFoundException("Aucun compte avec ce numéro de téléphone"));
         } else {
             throw new BadRequestException("Veuillez fournir un email ou un numéro de téléphone");
@@ -252,12 +240,14 @@ public class AuthenticationService {
     public void generateOtp(String email, String phoneNumber) {
         User user;
         String normalizedPhoneNumber = null;
+        String normalizedEmail = null;
 
         if (email != null && !email.isBlank()) {
-            user = userRepository.findByEmail(email)
+            normalizedEmail = email.trim().toLowerCase();
+            user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                     .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé avec cet email"));
 
-            otpCodeRepository.deleteByEmail(email);
+            otpCodeRepository.deleteByEmail(normalizedEmail);
         } else if (phoneNumber != null && !phoneNumber.isBlank()) {
             // Normaliser le numéro de téléphone
             normalizedPhoneNumber = PhoneNumberUtils.normalizePhoneNumber(phoneNumber);
@@ -274,7 +264,7 @@ public class AuthenticationService {
 
         // Sauvegarder le code OTP
         OtpCode otpCode = OtpCode.builder()
-                .email(email)
+                .email(normalizedEmail)
                 .phoneNumber(normalizedPhoneNumber)
                 .code(otp)
                 .expiryDate(LocalDateTime.now().plusMinutes(10))
@@ -284,10 +274,10 @@ public class AuthenticationService {
         otpCodeRepository.save(otpCode);
 
         // Envoyer OTP
-        if (email != null && !email.isBlank()) {
-            emailService.sendOtpEmail(email, otp, user.getFirstName());
+        if (normalizedEmail != null && !normalizedEmail.isBlank()) {
+            emailService.sendOtpEmail(normalizedEmail, otp, user.getFirstName());
         } else {
-            smsService.sendOtpSms(phoneNumber, otp);
+            smsService.sendOtpSms(normalizedPhoneNumber, otp);
         }
     }
 
@@ -295,12 +285,16 @@ public class AuthenticationService {
     @Transactional
     public void verifyOtp(VerifyOtpRequest request) {
         OtpCode otpCode;
+        String normalizedEmail = null;
+        String normalizedPhoneNumber = null;
 
         if (request.getEmail() != null && !request.getEmail().isBlank()) {
-            otpCode = otpCodeRepository.findByEmailAndVerifiedFalse(request.getEmail())
+            normalizedEmail = request.getEmail().trim().toLowerCase();
+            otpCode = otpCodeRepository.findByEmailAndVerifiedFalse(normalizedEmail)
                     .orElseThrow(() -> new BadRequestException("Code OTP invalide ou expiré"));
         } else if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()) {
-            otpCode = otpCodeRepository.findByPhoneNumberAndVerifiedFalse(request.getPhoneNumber())
+            normalizedPhoneNumber = PhoneNumberUtils.normalizePhoneNumber(request.getPhoneNumber());
+            otpCode = otpCodeRepository.findByPhoneNumberAndVerifiedFalse(normalizedPhoneNumber)
                     .orElseThrow(() -> new BadRequestException("Code OTP invalide ou expiré"));
         } else {
             throw new BadRequestException("Email ou numéro de téléphone requis");
@@ -326,7 +320,7 @@ public class AuthenticationService {
         // enable user
         User user;
         if (otpCode.getEmail() != null) {
-            user = userRepository.findByEmail(otpCode.getEmail())
+            user = userRepository.findByEmailIgnoreCase(otpCode.getEmail())
                     .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé"));
         } else {
             user = userRepository.findByPhoneNumber(otpCode.getPhoneNumber())
