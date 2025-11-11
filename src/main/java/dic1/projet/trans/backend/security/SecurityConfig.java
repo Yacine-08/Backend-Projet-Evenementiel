@@ -55,40 +55,40 @@ public class SecurityConfig {
                             "/webjars/**"
                     ).permitAll()
                     
-                    // Points d'entrée publics pour les événements
-                    .requestMatchers(
-                            "/api/events/events",
-                            "/api/events/search/**",
-                            "/api/events/{eventId}/**"
-                    ).permitAll()
-
-                    // Points d'entrée d'authentification
+                    // Authentication endpoints
                     .requestMatchers(
                             "/api/auth/**"
                     ).permitAll()
 
-                    // Points d'entrée publics
+                    // Public event endpoints
+                    .requestMatchers(
+                            "/api/events/events",
+                            "/api/events/search/**",
+                            "/api/events/{eventId}",
+                            "/api/events/{eventId}/details"
+                    ).permitAll()
 
-                    // Points d'entrée nécessitant une authentification
-                    .requestMatchers("/current-user").authenticated()
-
-                    // Points d'entrée administratifs
-                    .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
-
-                    // Points d'entrée organisateur
-                    .requestMatchers("/api/organizer/**").hasAnyRole("ORGANIZER", "ADMINISTRATOR")
-
-                    // Event statistics endpoints - allowing all authenticated users
+                    // Organizer endpoints
+                    .requestMatchers(
+                        "/api/events/my-events",
+                        "/api/organizer/**"
+                    ).hasAnyRole("ORGANIZER", "ADMINISTRATOR")
+                    
+                    // Event statistics endpoints - requiring authentication
                     .requestMatchers(
                         "/api/events/*/revenue",
                         "/api/events/*/potential-revenue",
                         "/api/events/*/booking-count"
                     ).authenticated()
                     
-                    // Other event endpoints
-                    .requestMatchers(
-                        "/api/events/**"
-                    ).hasAnyRole("CLIENT", "ORGANIZER", "ADMINISTRATOR")
+                    // Admin endpoints
+                    .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
+                    
+                    // Authenticated user endpoints
+                    .requestMatchers("/current-user").authenticated()
+                    
+                    // All other event endpoints require authentication
+                    .requestMatchers("/api/events/**").authenticated()
                     
                     // Points d'entrée authentifiés
                     .requestMatchers(

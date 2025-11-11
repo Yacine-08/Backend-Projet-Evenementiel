@@ -1,16 +1,14 @@
 package dic1.projet.trans.backend.controllers;
 
-import dic1.projet.trans.backend.dtos.EventCreateDTO;
-import dic1.projet.trans.backend.dtos.EventDetailsDTO;
-import dic1.projet.trans.backend.dtos.EventUpdateDTO;
+import dic1.projet.trans.backend.dtos.*;
 import dic1.projet.trans.backend.entities.Booking;
 import dic1.projet.trans.backend.entities.Event;
-
 import dic1.projet.trans.backend.entities.Ticket;
 import dic1.projet.trans.backend.entities.User;
+import dic1.projet.trans.backend.repositories.BookingRepository;
+import dic1.projet.trans.backend.repositories.EventRepository;
 import dic1.projet.trans.backend.enums.EventType;
 import dic1.projet.trans.backend.enums.Role;
-import dic1.projet.trans.backend.repositories.BookingRepository;
 import dic1.projet.trans.backend.repositories.EventRepository;
 import dic1.projet.trans.backend.repositories.TicketRepository;
 import dic1.projet.trans.backend.services.AuthenticationService;
@@ -24,8 +22,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
-
 
 import java.time.LocalDate;
 import java.util.List;
@@ -34,27 +30,23 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/events")
-@Tag(name = "Gestion des événements")
+@Tag(name = "Events", description = "Gestion des événements")
 public class EventController {
 
-    private final EventService eventService;
-    private final AuthenticationService authenticationService;
-    private final EventRepository eventRepository;
-    private final TicketRepository ticketRepository;
-    private final BookingRepository bookingRepository;
+    @Autowired
+    private EventService eventService;
 
     @Autowired
-    public EventController(EventService eventService,
-                         AuthenticationService authenticationService,
-                         EventRepository eventRepository,
-                         TicketRepository ticketRepository,
-                         BookingRepository bookingRepository) {
-        this.eventService = eventService;
-        this.authenticationService = authenticationService;
-        this.eventRepository = eventRepository;
-        this.ticketRepository = ticketRepository;
-        this.bookingRepository = bookingRepository;
-    }
+    private AuthenticationService authenticationService;
+
+    @Autowired
+    private EventRepository eventRepository;
+
+    @Autowired
+    private TicketRepository ticketRepository;
+
+    @Autowired
+    private BookingRepository bookingRepository;
 
     @Operation(summary = "Créer un événement (Organisateur uniquement)")
     @PostMapping("/create")

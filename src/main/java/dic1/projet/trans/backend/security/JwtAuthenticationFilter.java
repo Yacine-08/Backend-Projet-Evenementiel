@@ -34,7 +34,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-
         String path = request.getRequestURI();
         String method = request.getMethod();
         
@@ -44,62 +43,59 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             path.startsWith("/v3/api-docs") ||
             path.equals("/api/events/events") ||
             path.startsWith("/api/events/search") ||
-            (path.matches("/api/events/.*") && method.equals("GET"))) {
+            (path.matches("/api/events/[^/]+$") && method.equals("GET")) ||  // Pour /api/events/{eventId}
+            (path.matches("/api/events/[^/]+/details$") && method.equals("GET"))) {  // Pour /api/events/{eventId}/details
             filterChain.doFilter(request, response);
             return;
         }
+
+        final String authHeader = request.getHeader("Authorization");
+        
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Jeton d'authentification manquant ou invalide");
+            return;
+        }
+
         try {
-            final String authHeader = request.getHeader("Authorization");
-            final String jwt;
-            final String username;
+            final String jwt = authHeader.substring(7);
+            final String username = jwtService.extractUsername(jwt);
 
-            // Vérifier si l'en-tête Authorization existe et commence par "Bearer "
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                filterChain.doFilter(request, response);
+            if (username == null) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Jeton JWT invalide");
                 return;
             }
 
-            try {
-                // Extraire le token
-                jwt = authHeader.substring(7);
-                username = jwtService.extractUsername(jwt);
+            // Charger les détails de l'utilisateur
+            UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
-                if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                    // Charger les détails de l'utilisateur
-                    UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
-
-                    // Valider le token
-                    if (jwtService.isTokenValid(jwt, userDetails)) {
-                        // Créer l'objet d'authentification
-                        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities()
-                        );
-                        
-                        // Définir les détails de l'authentification
-                        authToken.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request)
-                        );
-                        
-                        // Mettre à jour le contexte de sécurité
-                        SecurityContextHolder.getContext().setAuthentication(authToken);
-                        
-                        logger.info("Authentifié l'utilisateur : " + username);
-                    }
-                }
-            } catch (Exception e) {
-                logger.error("Impossible d'authentifier l'utilisateur: ", e);
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Erreur d'authentification");
+            // Valider le token
+            if (!jwtService.isTokenValid(jwt, userDetails)) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Jeton JWT expiré ou invalide");
                 return;
             }
+
+            // Créer l'objet d'authentification
+            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                    userDetails,
+                    null,
+                    userDetails.getAuthorities()
+            );
             
-            filterChain.doFilter(request, response);
+            // Définir les détails de l'authentification
+            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            
+            // Mettre à jour le contexte de sécurité
+            SecurityContextHolder.getContext().setAuthentication(authToken);
+            
+            logger.info("Utilisateur authentifié avec succès: " + username);
             
         } catch (Exception e) {
-            logger.error("Erreur dans le filtre JWT: ", e);
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Erreur interne du serveur");
+            logger.error("Échec de l'authentification: ", e);
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Échec de l'authentification: " + e.getMessage());
+            return;
         }
+        
+        filterChain.doFilter(request, response);
     }
 }
 
