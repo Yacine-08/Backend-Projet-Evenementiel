@@ -140,19 +140,23 @@ public class AuthenticationService {
                     ? request.getEmail().trim().toLowerCase()
                     : PhoneNumberUtils.normalizePhoneNumber(request.getPhoneNumber());
 
-            Authentication auth = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                    identifier,
-                    request.getPassword()
-                )
-            );
-
-            User user = (User) auth.getPrincipal();
+            // Vérifier d'abord si l'utilisateur existe
+            User user = hasEmail 
+                ? userRepository.findByEmailIgnoreCase(identifier)
+                    .orElseThrow(() -> new UsernameNotFoundException("Aucun compte trouvé avec cet email"))
+                : userRepository.findByPhoneNumber(identifier)
+                    .orElseThrow(() -> new UsernameNotFoundException("Aucun compte trouvé avec ce numéro de téléphone"));
 
             if (!user.isEnabled()) {
-                throw new BadRequestException("Compte non vérifié. Veuillez vérifier votre email ou votre téléphone.");
+                throw new BadRequestException("Compte non vérifié. Veuillez vérifier votre email ou votre téléphone pour activer votre compte.");
             }
 
+            // Vérifier le mot de passe
+            if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+                throw new BadCredentialsException("Mot de passe incorrect");
+            }
+
+            // Authentification réussie, générer le token
             String jwtToken = jwtService.generateToken(user);
 
             return AuthenticationResponse.builder()
@@ -164,8 +168,13 @@ public class AuthenticationService {
             throw new BadCredentialsException("Identifiants invalides ou mot de passe incorrect");
         } catch (UsernameNotFoundException e) {
             throw new UsernameNotFoundException("Aucun compte trouvé avec cet identifiant");
+        } catch (BadRequestException e) {
+            throw e; // On laisse passer les BadRequestException telles quelles
         } catch (Exception e) {
-            throw new RuntimeException("Erreur lors de l'authentification", e);
+            // Log l'erreur pour le débogage
+            System.err.println("Erreur lors de l'authentification: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Erreur lors de l'authentification: " + e.getMessage(), e);
         }
     }
 
