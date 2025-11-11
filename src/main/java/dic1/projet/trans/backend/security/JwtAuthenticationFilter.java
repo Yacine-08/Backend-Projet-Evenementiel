@@ -165,8 +165,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // Détails d'un événement spécifique (pattern: /api/events/{eventId})
             // Ce pattern doit être vérifié EN DERNIER après avoir exclu les endpoints protégés
-            // Pattern: /api/events/ suivi d'un UUID ou ID (sans slash supplémentaire)
-            if (path.matches("/api/events/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")) {
+            // Pattern: /api/events/ suivi d'un ID alphanumérique (sans slash supplémentaire)
+            if (path.matches("/api/events/[a-zA-Z0-9]+" + "$")) {
+                logger.info("=== JWT FILTER: Public event details endpoint detected: " + path);
                 return true;
             }
         }

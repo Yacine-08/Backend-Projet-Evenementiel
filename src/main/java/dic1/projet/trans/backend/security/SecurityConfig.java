@@ -62,15 +62,20 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
 
                         // Public event endpoints (GET only)
-                        .requestMatchers(HttpMethod.GET, "/api/events/events").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/events/search/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/events/{eventId}").permitAll()
+                        .requestMatchers(HttpMethod.GET, 
+                            "/api/events",
+                            "/api/events/search",
+                            "/api/events/events",
+                            "/api/events/{eventId}",
+                            "/api/events/{eventId}/tickets"
+                        ).permitAll()
 
                         // Protected event endpoints - require authentication
                         .requestMatchers("/api/events/my-events").authenticated()
                         .requestMatchers("/api/events/create").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/events/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/events/**").authenticated()
+                        .requestMatchers("/api/events/*/bookings").authenticated()
                         .requestMatchers("/api/events/*/booking-count").authenticated()
                         .requestMatchers("/api/events/*/revenue").authenticated()
                         .requestMatchers("/api/events/*/potential-revenue").authenticated()

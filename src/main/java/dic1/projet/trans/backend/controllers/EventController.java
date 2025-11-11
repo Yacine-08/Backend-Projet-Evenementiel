@@ -23,10 +23,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
+
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/events")
@@ -138,19 +138,66 @@ public class EventController {
         }
     }
 
-    @Operation(summary = "Récupérer un événement par ID")
+    @Operation(summary = "Récupérer un événement par ID avec tous les détails")
     @GetMapping("/{eventId}")
     public ResponseEntity<?> getEvent(@PathVariable String eventId) {
         try {
+            // Récupérer l'événement de base
             Event event = eventService.getEventById(eventId);
-            List<Ticket> tickets = ticketRepository.findByEventId(eventId);
-            List<Booking> bookings = bookingRepository.findByEventId(eventId);
             
+            // Récupérer les billets de l'événement
+            List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+            
+            // Récupérer les réservations (uniquement pour l'organisateur)
+            List<Booking> bookings = Collections.emptyList();
+            
+            // Créer et retourner le DTO avec les détails complets
             EventDetailsDTO eventDetails = new EventDetailsDTO(event, tickets, bookings);
             return ResponseEntity.ok(eventDetails);
-        } catch (Exception e) {
+            
+        } catch (ResourceNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Une erreur est survenue lors de la récupération de l'événement: " + e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "Récupérer les billets d'un événement")
+    @GetMapping("/{eventId}/tickets")
+    public ResponseEntity<?> getEventTickets(@PathVariable String eventId) {
+        try {
+            List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+            return ResponseEntity.ok(tickets);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Impossible de récupérer les billets: " + e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "Récupérer les réservations d'un événement (Organisateur uniquement)")
+    @GetMapping("/{eventId}/bookings")
+    public ResponseEntity<?> getEventBookings(@PathVariable String eventId, Authentication authentication) {
+        try {
+            if (authentication == null || !authentication.isAuthenticated()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Authentification requise"));
+            }
+
+            User currentUser = authenticationService.getCurrentUser(authentication);
+            Event event = eventService.getEventById(eventId);
+            
+            if (!event.getOrganizer().getIdUser().equals(currentUser.getIdUser())){
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Accès non autorisé à ces réservations"));
+            }
+
+            List<Booking> bookings = bookingRepository.findByEventId(eventId);
+            return ResponseEntity.ok(bookings);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erreur lors de la récupération des réservations: " + e.getMessage()));
         }
     }
 
