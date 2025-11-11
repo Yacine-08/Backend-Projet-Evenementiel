@@ -41,6 +41,7 @@ public interface EventRepository extends MongoRepository<Event, String> {
     @Query("{ 'dateTimeStart': { $gte: ?0, $lt: ?1 }, 'eventStatus': { $ne: 'CANCELLED' } }")
     List<Event> findActiveEventsBetween(LocalDateTime start, LocalDateTime end);
 
+    @Query("{ 'organizer.idUser' : ?0 }")
     List<Event> findByOrganizerIdUser(String organizerId);
 
     @Query(value = "{ 'eventStatus': 'PUBLISHED', 'dateTimeEnd': { $gte: ?0 } }", sort = "{ 'dateTimeStart': -1 }")

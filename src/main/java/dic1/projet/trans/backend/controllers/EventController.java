@@ -1,16 +1,14 @@
 package dic1.projet.trans.backend.controllers;
 
-import dic1.projet.trans.backend.dtos.EventCreateDTO;
-import dic1.projet.trans.backend.dtos.EventDetailsDTO;
-import dic1.projet.trans.backend.dtos.EventUpdateDTO;
+import dic1.projet.trans.backend.dtos.*;
 import dic1.projet.trans.backend.entities.Booking;
 import dic1.projet.trans.backend.entities.Event;
-
 import dic1.projet.trans.backend.entities.Ticket;
 import dic1.projet.trans.backend.entities.User;
+import dic1.projet.trans.backend.repositories.BookingRepository;
+import dic1.projet.trans.backend.repositories.EventRepository;
 import dic1.projet.trans.backend.enums.EventType;
 import dic1.projet.trans.backend.enums.Role;
-import dic1.projet.trans.backend.repositories.BookingRepository;
 import dic1.projet.trans.backend.repositories.EventRepository;
 import dic1.projet.trans.backend.repositories.TicketRepository;
 import dic1.projet.trans.backend.services.AuthenticationService;
@@ -24,37 +22,31 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
+import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
 
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/events")
-@Tag(name = "Gestion des événements")
+@Tag(name = "Events", description = "Gestion des événements")
 public class EventController {
 
-    private final EventService eventService;
-    private final AuthenticationService authenticationService;
-    private final EventRepository eventRepository;
-    private final TicketRepository ticketRepository;
-    private final BookingRepository bookingRepository;
+    @Autowired
+    private EventService eventService;
 
     @Autowired
-    public EventController(EventService eventService,
-                         AuthenticationService authenticationService,
-                         EventRepository eventRepository,
-                         TicketRepository ticketRepository,
-                         BookingRepository bookingRepository) {
-        this.eventService = eventService;
-        this.authenticationService = authenticationService;
-        this.eventRepository = eventRepository;
-        this.ticketRepository = ticketRepository;
-        this.bookingRepository = bookingRepository;
-    }
+    private AuthenticationService authenticationService;
+
+    @Autowired
+    private EventRepository eventRepository;
+
+    @Autowired
+    private TicketRepository ticketRepository;
+
+    @Autowired
+    private BookingRepository bookingRepository;
 
     @Operation(summary = "Créer un événement (Organisateur uniquement)")
     @PostMapping("/create")
@@ -146,33 +138,123 @@ public class EventController {
         }
     }
 
-    @Operation(summary = "Récupérer un événement par ID")
+    @Operation(summary = "Récupérer un événement par ID avec tous les détails")
     @GetMapping("/{eventId}")
     public ResponseEntity<?> getEvent(@PathVariable String eventId) {
         try {
+            // Récupérer l'événement de base
             Event event = eventService.getEventById(eventId);
-            List<Ticket> tickets = ticketRepository.findByEventId(eventId);
-            List<Booking> bookings = bookingRepository.findByEventId(eventId);
             
+            // Récupérer les billets de l'événement
+            List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+            
+            // Récupérer les réservations (uniquement pour l'organisateur)
+            List<Booking> bookings = Collections.emptyList();
+            
+            // Créer et retourner le DTO avec les détails complets
             EventDetailsDTO eventDetails = new EventDetailsDTO(event, tickets, bookings);
             return ResponseEntity.ok(eventDetails);
-        } catch (Exception e) {
+            
+        } catch (ResourceNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Une erreur est survenue lors de la récupération de l'événement: " + e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "Récupérer les billets d'un événement")
+    @GetMapping("/{eventId}/tickets")
+    public ResponseEntity<?> getEventTickets(@PathVariable String eventId) {
+        try {
+            List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+            return ResponseEntity.ok(tickets);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Impossible de récupérer les billets: " + e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "Récupérer les réservations d'un événement (Organisateur uniquement)")
+    @GetMapping("/{eventId}/bookings")
+    public ResponseEntity<?> getEventBookings(@PathVariable String eventId, Authentication authentication) {
+        try {
+            if (authentication == null || !authentication.isAuthenticated()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Authentification requise"));
+            }
+
+            User currentUser = authenticationService.getCurrentUser(authentication);
+            Event event = eventService.getEventById(eventId);
+            
+            if (!event.getOrganizer().getIdUser().equals(currentUser.getIdUser())){
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Accès non autorisé à ces réservations"));
+            }
+
+            List<Booking> bookings = bookingRepository.findByEventId(eventId);
+            return ResponseEntity.ok(bookings);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erreur lors de la récupération des réservations: " + e.getMessage()));
         }
     }
 
     @Operation(summary = "Récupérer les événements (Organisateur)")
     @GetMapping("/my-events")
     public ResponseEntity<?> getMyEvents(Authentication authentication) {
-        User currentUser = authenticationService.getCurrentUser(authentication);
+        try {
+            // Debug: Log authentication object
+            System.out.println("=== DEBUG [getMyEvents]: Authentication object: " + authentication);
+            if (authentication != null) {
+                System.out.println("=== DEBUG [getMyEvents]: Principal: " + authentication.getPrincipal());
+                System.out.println("=== DEBUG [getMyEvents]: Authorities: " + authentication.getAuthorities());
+                System.out.println("=== DEBUG [getMyEvents]: Is authenticated: " + authentication.isAuthenticated());
+            } else {
+                System.out.println("=== DEBUG [getMyEvents]: Authentication is NULL");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of(
+                            "success", false,
+                            "error", "Non authentifié",
+                            "details", "Aucun utilisateur connecté"
+                        ));
+            }
 
-        if (!currentUser.getRoles().contains(Role.ORGANIZER)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Accessible uniquement aux organisateurs"));
+            User currentUser = authenticationService.getCurrentUser(authentication);
+            System.out.println("=== DEBUG [getMyEvents]: Current user: " + (currentUser != null ? currentUser.getUsername() : "null"));
+            System.out.println("=== DEBUG [getMyEvents]: User roles: " + (currentUser != null ? currentUser.getRoles() : "null"));
+
+            if (currentUser == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of(
+                            "success", false,
+                            "error", "Utilisateur non trouvé",
+                            "details", "Impossible de récupérer les informations de l'utilisateur"
+                        ));
+            }
+
+            if (!currentUser.getRoles().contains(Role.ORGANIZER)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of(
+                            "success", false,
+                            "error", "Accès refusé",
+                            "details", "Cette fonctionnalité est réservée aux organisateurs"
+                        ));
+            }
+
+            return ResponseEntity.ok(eventService.getEventsByOrganizer(currentUser.getIdUser()));
+        } catch (Exception e) {
+            System.err.println("=== ERROR in getMyEvents: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                        "success", false,
+                        "error", "Erreur interne du serveur",
+                        "details", e.getMessage(),
+                        "timestamp", java.time.LocalDateTime.now().toString()
+                    ));
         }
-
-        return ResponseEntity.ok(eventService.getEventsByOrganizer(currentUser.getIdUser()));
     }
 
     @GetMapping("/events")
