@@ -13,11 +13,14 @@ import java.util.List;
 
 public interface EventRepository extends MongoRepository<Event, String> {
     
-    // search by title (insensible à la casse et aux accents)
+    @Query("{'idEvent': {$in: ?0}}")
+    List<Event> findByIdIn(List<String> ids);
+    
+    // search by title (insensitive à la casse et aux accents)
     @Query("{'title': {$regex: ?0, $options: 'i'}}")
     List<Event> findByTitle(String title);
     
-    // search by location (insensible à la casse et aux accents)
+    // search by location (insensitive à la casse et aux accents)
     @Query("{'location': {$regex: ?0, $options: 'i'}}")
     List<Event> findByLocation(String location);
     

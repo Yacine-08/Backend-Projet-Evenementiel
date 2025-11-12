@@ -1,5 +1,6 @@
 package dic1.projet.trans.backend.controllers;
 
+import dic1.projet.trans.backend.dtos.BookingDetailsDTO;
 import dic1.projet.trans.backend.dtos.CreateBookingRequest;
 import dic1.projet.trans.backend.dtos.CreateNotificationRequest;
 import dic1.projet.trans.backend.entities.Booking;
@@ -37,6 +38,19 @@ public class BookingController {
     private final EmailService emailService;
     private final UserRepository userRepository;
     private final EventRepository eventRepository;
+
+    @GetMapping("/my-bookings")
+    @Operation(summary = "Récupérer mes réservations", 
+               description = "Récupère toutes les réservations de l'utilisateur connecté avec les détails complets")
+    public ResponseEntity<List<BookingDetailsDTO>> getMyBookings(@AuthenticationPrincipal UserDetails userDetails) {
+        String username = userDetails.getUsername();
+        // Récupérer l'utilisateur complet pour avoir son ID
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur non trouvé"));
+            
+        List<BookingDetailsDTO> bookings = bookingService.getUserBookings(user.getIdUser());
+        return ResponseEntity.ok(bookings);
+    }
 
     @PostMapping("/create")
     @Operation(summary = "Créer une réservation", description = "Crée une ou plusieurs réservations pour des tickets. Authentification requise.")

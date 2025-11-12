@@ -1,5 +1,6 @@
 package dic1.projet.trans.backend.services;
 
+import dic1.projet.trans.backend.dtos.BookingDetailsDTO;
 import dic1.projet.trans.backend.dtos.CreateBookingRequest;
 import dic1.projet.trans.backend.dtos.ReservedTicketRequest;
 import dic1.projet.trans.backend.entities.Booking;
@@ -27,6 +28,56 @@ public class BookingService {
     private final TicketRepository ticketRepository;
     private final EventRepository eventRepository;
     private final NotificationService notificationService;
+
+    /**
+     * Récupère toutes les réservations d'un utilisateur
+     * @param userId ID de l'utilisateur
+     * @return Liste des réservations de l'utilisateur
+     */
+    public List<BookingDetailsDTO> getUserBookings(String userId) {
+        System.out.println("Recherche des réservations pour l'utilisateur ID: " + userId);
+        List<Booking> bookings = bookingRepository.findByClientId(userId);
+        System.out.println("Nombre de réservations trouvées : " + bookings.size());
+        
+        // Récupérer tous les IDs d'événements uniques
+        List<String> eventIds = bookings.stream()
+                .map(Booking::getEventId)
+                .distinct()
+                .collect(Collectors.toList());
+                
+        // Récupérer tous les événements en une seule requête
+        Map<String, Event> events = eventRepository.findByIdIn(eventIds).stream()
+                .collect(Collectors.toMap(Event::getIdEvent, e -> e));
+        
+        // Récupérer tous les IDs de tickets uniques
+        List<String> ticketIds = bookings.stream()
+                .flatMap(booking -> booking.getTickets().stream())
+                .map(Booking.ReservedTicket::getTicketId)
+                .distinct()
+                .collect(Collectors.toList());
+                
+        // Récupérer tous les tickets en une seule requête
+        Map<String, Ticket> tickets = ticketRepository.findAllById(ticketIds).stream()
+                .collect(Collectors.toMap(Ticket::getTicketId, t -> t));
+        
+        // Construire la réponse avec les détails complets
+        return bookings.stream()
+                .map(booking -> {
+                    Event event = events.get(booking.getEventId());
+                    if (event == null) {
+                        return null; // ou gérer le cas où l'événement n'existe plus
+                    }
+                    
+                    List<Ticket> bookingTickets = booking.getTickets().stream()
+                            .map(bt -> tickets.get(bt.getTicketId()))
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList());
+                            
+                    return BookingDetailsDTO.fromBookingAndEvent(booking, event, bookingTickets);
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
 
     @Transactional
     public List<Booking> createBooking(String userId, CreateBookingRequest request) {
