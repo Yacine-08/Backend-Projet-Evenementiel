@@ -1,6 +1,6 @@
 package dic1.projet.trans.backend.controllers;
 
-import dic1.projet.trans.backend.dto.OrganizerStatsResponse;
+import dic1.projet.trans.backend.dtos.OrganizerStatsResponse;
 import dic1.projet.trans.backend.services.OrganizerStatsService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

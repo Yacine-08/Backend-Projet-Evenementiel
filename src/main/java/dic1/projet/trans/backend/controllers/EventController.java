@@ -113,6 +113,8 @@ public class EventController {
         }
     }
 
+
+
     @Operation(summary = "Annuler un événement")
     @PutMapping("/{eventId}/cancel")
     public ResponseEntity<?> cancelEvent(
@@ -135,6 +137,41 @@ public class EventController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    @Operation(summary = "Supprimer un événement")
+    @DeleteMapping("/{eventId}/delete")
+    public ResponseEntity<?> deleteEvent(
+            @PathVariable String eventId,
+            Authentication authentication) {
+            
+        try {
+            if (authentication == null || !authentication.isAuthenticated()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Authentification requise"));
+            }
+            
+            User currentUser = authenticationService.getCurrentUser(authentication);
+            Event event = eventService.getEventById(eventId);
+            
+            // Vérifier que l'utilisateur est l'organisateur
+            boolean isOrganizer = event.getOrganizer().getIdUser().equals(currentUser.getIdUser());
+            
+            if (!isOrganizer) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Seul l'organisateur peut supprimer cet événement"));
+            }
+            
+            eventService.deleteEvent(eventId);
+            return ResponseEntity.ok(Map.of("message", "Événement supprimé avec succès"));
+            
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erreur lors de la suppression de l'événement: " + e.getMessage()));
         }
     }
 

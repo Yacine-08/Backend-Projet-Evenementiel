@@ -1,6 +1,6 @@
 package dic1.projet.trans.backend.services;
 
-import dic1.projet.trans.backend.dto.OrganizerStatsResponse;
+import dic1.projet.trans.backend.dtos.OrganizerStatsResponse;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;

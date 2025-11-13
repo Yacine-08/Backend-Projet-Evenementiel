@@ -1,4 +1,4 @@
-package dic1.projet.trans.backend.dto;
+package dic1.projet.trans.backend.dtos;
 
 import java.math.BigDecimal;
 
