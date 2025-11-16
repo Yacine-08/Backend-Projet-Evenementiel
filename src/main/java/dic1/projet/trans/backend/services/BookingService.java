@@ -89,8 +89,28 @@ public class BookingService {
         Event event = eventRepository.findById(request.getEventId())
                 .orElseThrow(() -> new ResourceNotFoundException("Événement non trouvé: " + request.getEventId()));
 
-        List<Booking> createdBookings = new ArrayList<>();
-        String groupId = UUID.randomUUID().toString(); // Générer un ID de groupe unique
+        // Idempotence: fusionner avec une réservation PENDING existante de même utilisateur+événement
+        List<Booking> existingPendings = bookingRepository.findByClientIdAndEventIdAndBookingStatus(
+                userId, request.getEventId(), BookingStatus.PENDING);
+        Booking booking;
+        if (!existingPendings.isEmpty()) {
+            booking = existingPendings.get(0);
+        } else {
+            booking = new Booking();
+            booking.setGroupId(UUID.randomUUID().toString());
+            booking.setBookingDate(LocalDateTime.now());
+            booking.setPaymentMethod(request.getPaymentMethod());
+            booking.setBookingStatus(BookingStatus.PENDING);
+            booking.setClientId(userId);
+            booking.setEventId(request.getEventId());
+            booking.setTickets(new ArrayList<>());
+            booking.setTotalAmount(0.0);
+        }
+
+        List<Booking.ReservedTicket> reservedTickets = booking.getTickets() != null
+                ? new ArrayList<>(booking.getTickets())
+                : new ArrayList<>();
+        double totalAmount = booking.getTotalAmount();
 
         for (ReservedTicketRequest rt : request.getTickets()) {
             Ticket ticket = ticketRepository.findById(rt.getTicketId())
@@ -105,27 +125,14 @@ public class BookingService {
                 throw new BadRequestException("Quantité demandée supérieure au stock disponible pour le ticket: " + rt.getTicketId());
             }
 
-            // Créer une réservation pour chaque quantité de ticket
-            for (int i = 0; i < rt.getQuantity(); i++) {
-                Booking booking = new Booking();
-                booking.setGroupId(groupId);  // Même groupId pour toutes les réservations du même groupe
-                booking.setTotalAmount(ticket.getPrice());
-                booking.setBookingDate(LocalDateTime.now());
-                booking.setPaymentMethod(request.getPaymentMethod());
-                booking.setBookingStatus(BookingStatus.PENDING);
-                booking.setClientId(userId);
-                booking.setEventId(request.getEventId());
-
-                // Un seul ticket par réservation
-                List<Booking.ReservedTicket> reservedTickets = new ArrayList<>();
-                reservedTickets.add(new Booking.ReservedTicket(ticket.getTicketId(), 1));
-                booking.setTickets(reservedTickets);
-
-                createdBookings.add(bookingRepository.save(booking));
-            }
+            reservedTickets.add(new Booking.ReservedTicket(ticket.getTicketId(), rt.getQuantity()));
+            totalAmount += (ticket.getPrice() * rt.getQuantity());
         }
 
-        return createdBookings;
+        booking.setTickets(reservedTickets);
+        booking.setTotalAmount(totalAmount);
+        Booking saved = bookingRepository.save(booking);
+        return Collections.singletonList(saved);
     }
     
     /**
@@ -151,15 +158,14 @@ public class BookingService {
         for (Booking.ReservedTicket rt : booking.getTickets()) {
             Ticket ticket = ticketRepository.findById(rt.getTicketId())
                     .orElseThrow(() -> new ResourceNotFoundException("Ticket non trouvé: " + rt.getTicketId()));
-                    
-            // Compter les réservations confirmées pour ce ticket
-            int alreadySold = bookingRepository.countByTickets_TicketIdAndBookingStatus(
-                rt.getTicketId(), BookingStatus.CONFIRMED).orElse(0);
-                
+
+            // Somme des quantités déjà vendues (réservations confirmées) pour ce ticket
+            int alreadySold = bookingRepository.countSoldTicketsByTicketId(rt.getTicketId()).orElse(0);
+
             // Vérifier la disponibilité en tenant compte de la quantité actuelle
             int available = ticket.getInitialQuantity() - alreadySold;
             if (rt.getQuantity() > available) {
-                throw new BadRequestException("Quantité insuffisante pour le ticket " + ticket.getTicketType() + 
+                throw new BadRequestException("Quantité insuffisante pour le ticket " + ticket.getTicketType() +
                     ". Disponible: " + available + ", Demandé: " + rt.getQuantity());
             }
         }
@@ -170,13 +176,15 @@ public class BookingService {
         // Mettre à jour les quantités vendues pour chaque ticket
         for (Booking.ReservedTicket rt : booking.getTickets()) {
             ticketRepository.findById(rt.getTicketId()).ifPresent(ticket -> {
-                // Compter les réservations confirmées existantes
-                int totalSold = bookingRepository.countByTickets_TicketIdAndBookingStatus(
-                    rt.getTicketId(), BookingStatus.CONFIRMED).orElse(0);
-                
+                // Somme des quantités confirmées existantes
+                int totalSold = bookingRepository.countSoldTicketsByTicketId(rt.getTicketId()).orElse(0);
+
                 // Ajouter la quantité de la réservation actuelle
                 totalSold += rt.getQuantity();
-                
+
+                // Ne pas dépasser la quantité initiale
+                totalSold = Math.min(totalSold, ticket.getInitialQuantity());
+
                 // Mettre à jour le nombre de billets vendus
                 ticket.setSoldQuantity(totalSold);
                 ticketRepository.save(ticket);

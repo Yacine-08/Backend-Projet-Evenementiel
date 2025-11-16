@@ -254,7 +254,7 @@ public class EventService {
      * @return Le nombre de réservations confirmées
      */
     public long getBookingCount(String eventId) {
-        System.out.println("=== DEBUG: Getting booking count for event: " + eventId);
+        System.out.println("=== DEBUG: Getting tickets sold count for event: " + eventId);
 
         // Compter uniquement les réservations confirmées
         List<Booking> bookings = bookingRepository.findByEventIdAndBookingStatus(
@@ -262,20 +262,17 @@ public class EventService {
                 BookingStatus.CONFIRMED
         );
 
-        // Retourner le nombre de réservations (pas le nombre de billets)
         long bookingCount = bookings.size();
-        
-        // Log supplémentaire pour le débogage
-        System.out.println("=== DEBUG: Number of confirmed bookings: " + bookingCount);
-        
-        // Si nécessaire, on peut aussi logger le nombre total de billets
         long totalTickets = bookings.stream()
                 .flatMap(booking -> booking.getTickets().stream())
                 .mapToLong(Booking.ReservedTicket::getQuantity)
                 .sum();
-        System.out.println("=== DEBUG: Total tickets across all bookings: " + totalTickets);
 
-        return bookingCount;
+        System.out.println("=== DEBUG: Number of confirmed bookings: " + bookingCount);
+        System.out.println("=== DEBUG: Total confirmed tickets (seats) sold: " + totalTickets);
+
+        // Retourner le nombre total de places (billets) vendues
+        return totalTickets;
     }
     
     /**

@@ -23,6 +23,7 @@ public interface BookingRepository extends MongoRepository<Booking, String> {
     List<Booking> findByEventId(String eventId);
     
     List<Booking> findByEventIdAndBookingStatus(String eventId, BookingStatus status);
+    List<Booking> findByClientIdAndEventIdAndBookingStatus(String clientId, String eventId, BookingStatus status);
     
     @Aggregation(pipeline = {
         // Match all confirmed bookings for the event
