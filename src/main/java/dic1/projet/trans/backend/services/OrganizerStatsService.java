@@ -21,6 +21,7 @@ public class OrganizerStatsService {
 
     public OrganizerStatsResponse getStatsForOrganizer(String organizerId) {
         List<Event> events = eventRepository.findByOrganizerIdUser(organizerId);
+        System.out.println("=== STATS: Computing organizer stats for userId=" + organizerId + ", eventsFound=" + (events != null ? events.size() : 0));
 
         int activeEventsCount = (int) events.stream()
                 .filter(e -> e.getEventStatus() != null && !"CANCELLED".equals(e.getEventStatus().name()))
@@ -35,21 +36,28 @@ public class OrganizerStatsService {
 
         for (Event event : events) {
             String eventId = event.getIdEvent();
+            List<Booking> allBookings = bookingRepository.findByEventId(eventId);
+            long confirmedCount = allBookings.stream().filter(b -> b.getBookingStatus() == BookingStatus.CONFIRMED).count();
+            long pendingCount = allBookings.stream().filter(b -> b.getBookingStatus() == BookingStatus.PENDING).count();
+            long cancelledCount = allBookings.stream().filter(b -> b.getBookingStatus() == BookingStatus.CANCELLED).count();
 
-            List<Booking> confirmed = bookingRepository.findByEventIdAndBookingStatus(eventId, BookingStatus.CONFIRMED);
-            List<Booking> cancelled = bookingRepository.findByEventIdAndBookingStatus(eventId, BookingStatus.CANCELLED);
+            totalReservations += (confirmedCount + pendingCount);
+            cancelledReservations += cancelledCount;
 
-            totalReservations += confirmed.size();
-            cancelledReservations += cancelled.size();
+            double eventRevenue = allBookings.stream()
+                    .filter(b -> b.getBookingStatus() != BookingStatus.CANCELLED)
+                    .mapToDouble(Booking::getTotalAmount)
+                    .sum();
+            totalRevenueDouble += eventRevenue;
 
-            Double revenue = bookingRepository.calculateTotalRevenueByEventId(eventId);
-            if (revenue != null) {
-                totalRevenueDouble += revenue;
-            }
+            System.out.println("=== STATS: Event=" + eventId + " title='" + event.getTitle() + "' confirmed=" + confirmedCount + ", pending=" + pendingCount + ", cancelled=" + cancelledCount + ", eventRevenue=" + eventRevenue);
 
             Integer capacity = event.getCapacityMaximal();
             if (capacity != null && capacity > 0) {
-                int ticketsSold = confirmed.stream()
+                List<Booking> confirmedBookings = allBookings.stream()
+                        .filter(b -> b.getBookingStatus() == BookingStatus.CONFIRMED)
+                        .toList();
+                int ticketsSold = confirmedBookings.stream()
                         .flatMap(b -> b.getTickets().stream())
                         .mapToInt(Booking.ReservedTicket::getQuantity)
                         .sum();
@@ -59,6 +67,7 @@ public class OrganizerStatsService {
         }
 
         double averageFillRate = fillRateEventCount > 0 ? (fillRateSum / fillRateEventCount) : 0.0;
+        System.out.println("=== STATS: Organizer=" + organizerId + " totals -> activeEvents=" + activeEventsCount + ", totalReservations=" + totalReservations + ", cancelledReservations=" + cancelledReservations + ", totalRevenue=" + totalRevenueDouble + ", avgFillRate=" + averageFillRate);
 
         return new OrganizerStatsResponse(
                 activeEventsCount,
