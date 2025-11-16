@@ -27,6 +27,7 @@ public class BookingDetailsDTO {
     private String status;
     private List<BookedTicketDTO> tickets;
     private double totalAmount;
+    private String clientName;
 
     public static BookingDetailsDTO fromBookingAndEvent(Booking booking, Event event, List<Ticket> ticketDetails) {
         // Créer une map des détails des tickets pour un accès rapide

@@ -5,14 +5,16 @@ import java.math.BigDecimal;
 public class OrganizerStatsResponse {
     private int activeEventsCount;
     private long totalReservations;
+    private long cancelledReservations;
     private BigDecimal totalRevenue;
     private double fillRate; // 0.0 - 1.0
 
     public OrganizerStatsResponse() {}
 
-    public OrganizerStatsResponse(int activeEventsCount, long totalReservations, BigDecimal totalRevenue, double fillRate) {
+    public OrganizerStatsResponse(int activeEventsCount, long totalReservations, long cancelledReservations, BigDecimal totalRevenue, double fillRate) {
         this.activeEventsCount = activeEventsCount;
         this.totalReservations = totalReservations;
+        this.cancelledReservations = cancelledReservations;
         this.totalRevenue = totalRevenue;
         this.fillRate = fillRate;
     }
@@ -31,6 +33,14 @@ public class OrganizerStatsResponse {
 
     public void setTotalReservations(long totalReservations) {
         this.totalReservations = totalReservations;
+    }
+
+    public long getCancelledReservations() {
+        return cancelledReservations;
+    }
+
+    public void setCancelledReservations(long cancelledReservations) {
+        this.cancelledReservations = cancelledReservations;
     }
 
     public BigDecimal getTotalRevenue() {

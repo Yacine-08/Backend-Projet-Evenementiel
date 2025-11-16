@@ -12,6 +12,7 @@ import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
 import dic1.projet.trans.backend.repositories.BookingRepository;
 import dic1.projet.trans.backend.repositories.EventRepository;
 import dic1.projet.trans.backend.repositories.TicketRepository;
+import dic1.projet.trans.backend.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,7 @@ public class BookingService {
     private final TicketRepository ticketRepository;
     private final EventRepository eventRepository;
     private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     /**
      * Récupère toutes les réservations d'un utilisateur
@@ -239,6 +241,44 @@ public class BookingService {
     public Optional<Booking> getBookingByIdOwned(String bookingId, String userId) {
         return bookingRepository.findById(bookingId)
                 .filter(booking -> booking.getClientId().equals(userId));
+    }
+
+    public List<BookingDetailsDTO> getRecentBookingsForOrganizer(String organizerId, Integer limit, BookingStatus status) {
+        List<Event> events = eventRepository.findByOrganizerIdUser(organizerId);
+        List<String> eventIds = events.stream().map(Event::getIdEvent).toList();
+        if (eventIds.isEmpty()) return Collections.emptyList();
+
+        List<Booking> bookings = (status != null)
+                ? bookingRepository.findByEventIdInAndBookingStatusOrderByBookingDateDesc(eventIds, status)
+                : bookingRepository.findByEventIdInOrderByBookingDateDesc(eventIds);
+
+        int n = (limit != null && limit > 0) ? limit : 5;
+        List<Booking> limited = bookings.stream().limit(n).toList();
+
+        Map<String, Event> eventMap = events.stream().collect(Collectors.toMap(Event::getIdEvent, e -> e));
+
+        List<String> ticketIds = limited.stream()
+                .flatMap(b -> b.getTickets().stream())
+                .map(Booking.ReservedTicket::getTicketId)
+                .distinct()
+                .toList();
+        Map<String, Ticket> tickets = ticketRepository.findAllById(ticketIds).stream()
+                .collect(Collectors.toMap(Ticket::getTicketId, t -> t));
+
+        return limited.stream().map(b -> {
+            Event ev = eventMap.get(b.getEventId());
+            if (ev == null) return null;
+            List<Ticket> bookedTickets = b.getTickets().stream()
+                    .map(rt -> tickets.get(rt.getTicketId()))
+                    .filter(Objects::nonNull)
+                    .toList();
+            BookingDetailsDTO dto = BookingDetailsDTO.fromBookingAndEvent(b, ev, bookedTickets);
+            userRepository.findById(b.getClientId()).ifPresent(u -> {
+                String full = ((u.getFirstName() != null ? u.getFirstName() : "") + " " + (u.getLastName() != null ? u.getLastName() : "")).trim();
+                dto.setClientName(full.isEmpty() ? (u.getUsername() != null ? u.getUsername() : u.getEmail()) : full);
+            });
+            return dto;
+        }).filter(Objects::nonNull).toList();
     }
     
     /**

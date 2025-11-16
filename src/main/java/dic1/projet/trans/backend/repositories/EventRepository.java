@@ -47,6 +47,8 @@ public interface EventRepository extends MongoRepository<Event, String> {
     @Query("{ 'organizer.idUser' : ?0 }")
     List<Event> findByOrganizerIdUser(String organizerId);
 
+    List<Event> findByOrganizerIdUser(String organizerId, Sort sort);
+
     @Query(value = "{ 'eventStatus': 'PUBLISHED', 'dateTimeEnd': { $gte: ?0 } }", sort = "{ 'dateTimeStart': -1 }")
     List<Event> findAllAvailableEvents(LocalDateTime currentDate);
     

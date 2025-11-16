@@ -18,6 +18,8 @@ import dic1.projet.trans.backend.repositories.EventRepository;
 import dic1.projet.trans.backend.repositories.TicketRepository;
 import dic1.projet.trans.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Sort.Direction;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
@@ -349,6 +351,15 @@ public class EventService {
      */
     public List<Event> getEventsByOrganizer(String organizerId) {
         return eventRepository.findByOrganizerIdUser(organizerId);
+    }
+
+    public List<Event> getRecentEventsByOrganizer(String organizerId, int limit) {
+        List<Event> events = eventRepository.findByOrganizerIdUser(organizerId, Sort.by(Direction.DESC, "dateTimeStart"));
+        if (events == null || events.isEmpty()) {
+            return Collections.emptyList();
+        }
+        int n = Math.max(limit, 1);
+        return events.stream().limit(n).toList();
     }
 
     /**
