@@ -48,4 +48,15 @@ public class OrganizerStatsController {
         }
         return ResponseEntity.ok(bookingService.getRecentBookingsForOrganizer(userId, limit, st));
     }
+
+    @GetMapping("/{userId}/events/revenues")
+    public ResponseEntity<?> getEventRevenues(@PathVariable("userId") String userId) {
+        return ResponseEntity.ok(eventService.getEventRevenuesByOrganizer(userId));
+    }
+
+    @GetMapping("/{userId}/sales/monthly")
+    public ResponseEntity<?> getMonthlySales(@PathVariable("userId") String userId,
+                                             @RequestParam(value = "months", required = false, defaultValue = "6") int months) {
+        return ResponseEntity.ok(bookingService.getMonthlySalesForOrganizer(userId, months));
+    }
 }

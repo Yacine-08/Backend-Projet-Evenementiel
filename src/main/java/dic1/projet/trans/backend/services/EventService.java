@@ -256,24 +256,23 @@ public class EventService {
      * @return Le nombre de réservations confirmées
      */
     public long getBookingCount(String eventId) {
-        System.out.println("=== DEBUG: Getting tickets sold count for event: " + eventId);
+        System.out.println("=== DEBUG: Getting tickets reserved (non-cancelled) for event: " + eventId);
 
-        // Compter uniquement les réservations confirmées
-        List<Booking> bookings = bookingRepository.findByEventIdAndBookingStatus(
-                eventId,
-                BookingStatus.CONFIRMED
-        );
+        List<Booking> bookings = bookingRepository.findByEventId(eventId);
 
-        long bookingCount = bookings.size();
         long totalTickets = bookings.stream()
+                .filter(b -> b.getBookingStatus() != BookingStatus.CANCELLED)
                 .flatMap(booking -> booking.getTickets().stream())
                 .mapToLong(Booking.ReservedTicket::getQuantity)
                 .sum();
 
-        System.out.println("=== DEBUG: Number of confirmed bookings: " + bookingCount);
-        System.out.println("=== DEBUG: Total confirmed tickets (seats) sold: " + totalTickets);
-
-        // Retourner le nombre total de places (billets) vendues
+        System.out.println("=== DEBUG: Total reserved tickets (seats) non-cancelled: " + totalTickets);
+        if (totalTickets == 0) {
+            List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+            long sold = tickets.stream().mapToLong(Ticket::getSoldQuantity).sum();
+            System.out.println("=== DEBUG: Fallback tickets.soldQuantity sum: " + sold);
+            return sold;
+        }
         return totalTickets;
     }
     
@@ -302,48 +301,24 @@ public class EventService {
      * Calcule le revenu total d'un événement en fonction des réservations
      */
     public double calculateEventRevenue(String eventId) {
-        System.out.println("=== DEBUG: Calculating revenue for event: " + eventId);
-        Double revenue = bookingRepository.calculateTotalRevenueByEventId(eventId);
-        System.out.println("=== DEBUG: Raw revenue from repository: " + revenue);
-        
-        // If no revenue is found from the aggregation, calculate it manually
-        if (revenue == null || revenue == 0.0) {
-            List<Booking> bookings = bookingRepository.findByEventIdAndBookingStatus(eventId, BookingStatus.CONFIRMED);
-            System.out.println("=== DEBUG: Found " + bookings.size() + " confirmed bookings for event " + eventId);
-            
-            if (!bookings.isEmpty()) {
-                double calculatedRevenue = 0.0;
-                
-                for (Booking booking : bookings) {
-                    System.out.println("=== DEBUG: Processing booking: " + booking.getBookingId());
-                    
-                    if (booking.getTickets() != null && !booking.getTickets().isEmpty()) {
-                        System.out.println("=== DEBUG: Booking has " + booking.getTickets().size() + " tickets");
-                        
-                        for (Booking.ReservedTicket ticket : booking.getTickets()) {
-                            System.out.println("=== DEBUG: Ticket ID: " + ticket.getTicketId() + ", Quantity: " + ticket.getQuantity());
-                            
-                            // Look up the ticket price
-                            Optional<Ticket> ticketInfo = ticketRepository.findById(ticket.getTicketId());
-                            if (ticketInfo.isPresent()) {
-                                double ticketAmount = ticketInfo.get().getPrice() * ticket.getQuantity();
-                                System.out.println("=== DEBUG: Ticket price: " + ticketInfo.get().getPrice());
-                                System.out.println("=== DEBUG: Calculated amount: " + ticketAmount);
-                                calculatedRevenue += ticketAmount;
-                            } else {
-                                System.out.println("=== DEBUG: Could not find ticket with ID: " + ticket.getTicketId());
-                            }
-                        }
-                    }
-                }
-                
-                System.out.println("=== DEBUG: Total calculated revenue: " + calculatedRevenue);
-                return calculatedRevenue;
-            }
-            return 0.0;
+        System.out.println("=== DEBUG: Calculating revenue (non-cancelled bookings) for event: " + eventId);
+        List<Booking> bookings = bookingRepository.findByEventId(eventId);
+
+        double total = bookings.stream()
+                .filter(b -> b.getBookingStatus() != BookingStatus.CANCELLED)
+                .mapToDouble(Booking::getTotalAmount)
+                .sum();
+
+        System.out.println("=== DEBUG: Event " + eventId + " revenue from non-cancelled bookings: " + total);
+        if (total == 0.0) {
+            List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+            double alt = tickets.stream()
+                    .mapToDouble(t -> t.getPrice() * t.getSoldQuantity())
+                    .sum();
+            System.out.println("=== DEBUG: Fallback revenue from tickets price*soldQuantity: " + alt);
+            return alt;
         }
-        
-        return revenue;
+        return total;
     }
 
     /**
@@ -353,13 +328,46 @@ public class EventService {
         return eventRepository.findByOrganizerIdUser(organizerId);
     }
 
-    public List<Event> getRecentEventsByOrganizer(String organizerId, int limit) {
+    public List<dic1.projet.trans.backend.dtos.RecentEventDTO> getRecentEventsByOrganizer(String organizerId, int limit) {
         List<Event> events = eventRepository.findByOrganizerIdUser(organizerId, Sort.by(Direction.DESC, "dateTimeStart"));
         if (events == null || events.isEmpty()) {
             return Collections.emptyList();
         }
         int n = Math.max(limit, 1);
-        return events.stream().limit(n).toList();
+        return events.stream()
+                .limit(n)
+                .map(ev -> {
+                    String eventId = ev.getIdEvent();
+                    long seats = getBookingCount(eventId);
+                    double rev = calculateEventRevenue(eventId);
+                    System.out.println("=== RECENT EVENTS: eventId=" + eventId + ", title='" + ev.getTitle() + "' seats=" + seats + ", revenue=" + rev);
+                    return dic1.projet.trans.backend.dtos.RecentEventDTO.builder()
+                            .idEvent(eventId)
+                            .title(ev.getTitle())
+                            .dateTimeStart(ev.getDateTimeStart())
+                            .capacityMaximal(ev.getCapacityMaximal())
+                            .eventStatus(ev.getEventStatus())
+                            .reservationsSeats(seats)
+                            .revenue(rev)
+                            .build();
+                })
+                .toList();
+    }
+
+    public List<dic1.projet.trans.backend.dtos.RevenueByEventDTO> getEventRevenuesByOrganizer(String organizerId) {
+        List<Event> events = eventRepository.findByOrganizerIdUser(organizerId);
+        if (events == null || events.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return events.stream().map(ev -> {
+            double revenue = calculateEventRevenue(ev.getIdEvent());
+            System.out.println("=== ORGANIZER EVENT REVENUE: organizer=" + organizerId + ", eventId=" + ev.getIdEvent() + ", title='" + ev.getTitle() + "', revenue=" + revenue);
+            return dic1.projet.trans.backend.dtos.RevenueByEventDTO.builder()
+                    .eventId(ev.getIdEvent())
+                    .title(ev.getTitle())
+                    .totalRevenue(revenue)
+                    .build();
+        }).toList();
     }
 
     /**

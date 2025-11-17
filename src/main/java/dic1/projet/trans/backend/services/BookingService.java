@@ -280,6 +280,48 @@ public class BookingService {
             return dto;
         }).filter(Objects::nonNull).toList();
     }
+
+    public List<dic1.projet.trans.backend.dtos.MonthlySalesDTO> getMonthlySalesForOrganizer(String organizerId, int months) {
+        List<Event> events = eventRepository.findByOrganizerIdUser(organizerId);
+        List<String> eventIds = events.stream().map(Event::getIdEvent).toList();
+        if (eventIds.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        int m = months > 0 ? months : 6;
+        java.time.LocalDateTime start = now.minusMonths(m - 1).withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+
+        List<Booking> bookings = bookingRepository.findByEventIdInOrderByBookingDateDesc(eventIds);
+
+        java.util.Map<java.time.YearMonth, Long> counts = new java.util.LinkedHashMap<>();
+        for (int i = m - 1; i >= 0; i--) {
+            java.time.YearMonth ym = java.time.YearMonth.from(now.minusMonths(i));
+            counts.put(ym, 0L);
+        }
+
+        for (Booking b : bookings) {
+            if (b.getBookingDate() == null) continue;
+            if (b.getBookingStatus() != BookingStatus.CONFIRMED) continue;
+            if (b.getBookingDate().isBefore(start)) continue;
+            java.time.YearMonth ym = java.time.YearMonth.from(b.getBookingDate());
+            if (counts.containsKey(ym)) {
+                counts.put(ym, counts.get(ym) + 1);
+            }
+        }
+
+        List<dic1.projet.trans.backend.dtos.MonthlySalesDTO> result = new java.util.ArrayList<>();
+        counts.forEach((ym, count) -> {
+            String label = ym.getYear() + "-" + String.format("%02d", ym.getMonthValue());
+            System.out.println("=== MONTHLY SALES: organizer=" + organizerId + ", month=" + label + ", salesCount=" + count);
+            result.add(dic1.projet.trans.backend.dtos.MonthlySalesDTO.builder()
+                    .month(label)
+                    .salesCount(count)
+                    .build());
+        });
+
+        return result;
+    }
     
     /**
      * Récupère la première réservation d'un groupe
