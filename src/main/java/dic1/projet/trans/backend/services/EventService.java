@@ -370,6 +370,62 @@ public class EventService {
         }).toList();
     }
 
+    public List<dic1.projet.trans.backend.dtos.CategoryCountDTO> getEventCategoryCountsByOrganizer(String organizerId) {
+        List<Event> events = eventRepository.findByOrganizerIdUser(organizerId);
+        if (events == null || events.isEmpty()) {
+            return Collections.emptyList();
+        }
+        java.util.Map<String, Long> counts = new java.util.HashMap<>();
+        for (Event ev : events) {
+            String cat = ev.getCategory() != null ? ev.getCategory().trim() : "";
+            if (cat.isEmpty()) continue;
+            counts.put(cat, counts.getOrDefault(cat, 0L) + 1);
+        }
+        List<dic1.projet.trans.backend.dtos.CategoryCountDTO> result = new java.util.ArrayList<>();
+        counts.forEach((cat, count) -> {
+            System.out.println("=== ORGANIZER CATEGORY COUNT: organizer=" + organizerId + ", category='" + cat + "', count=" + count);
+            result.add(dic1.projet.trans.backend.dtos.CategoryCountDTO.builder()
+                    .category(cat)
+                    .count(count)
+                    .build());
+        });
+        // Sort descending by count
+        result.sort((a, b) -> Long.compare(b.getCount(), a.getCount()));
+        return result;
+    }
+
+    public List<dic1.projet.trans.backend.dtos.FillRateByEventDTO> getEventFillRatesByOrganizer(String organizerId) {
+        List<Event> events = eventRepository.findByOrganizerIdUser(organizerId);
+        if (events == null || events.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<dic1.projet.trans.backend.dtos.FillRateByEventDTO> result = new java.util.ArrayList<>();
+        for (Event ev : events) {
+            Integer capacityVal = ev.getCapacityMaximal();
+            int capacity = capacityVal != null ? capacityVal : 0;
+            long reservedSeats = 0L;
+            List<Booking> bookings = bookingRepository.findByEventId(ev.getIdEvent());
+            for (Booking b : bookings) {
+                if (b.getBookingStatus() == dic1.projet.trans.backend.enums.BookingStatus.CANCELLED) continue;
+                if (b.getTickets() != null) {
+                    for (Booking.ReservedTicket rt : b.getTickets()) {
+                        reservedSeats += rt.getQuantity();
+                    }
+                }
+            }
+            double fillRate = capacity > 0 ? Math.min(100.0, (reservedSeats * 100.0) / capacity) : 0.0;
+            System.out.println("=== ORGANIZER FILL RATE: organizer=" + organizerId + ", eventId=" + ev.getIdEvent() + ", title='" + ev.getTitle() + "', fillRate=" + fillRate + ", reservedSeats=" + reservedSeats + "/" + capacity);
+            result.add(dic1.projet.trans.backend.dtos.FillRateByEventDTO.builder()
+                    .eventId(ev.getIdEvent())
+                    .title(ev.getTitle())
+                    .fillRate(fillRate)
+                    .build());
+        }
+        // Optionally sort by fill rate descending
+        result.sort((a, b) -> Double.compare(b.getFillRate(), a.getFillRate()));
+        return result;
+    }
+
     /**
      * Cloner un événement pour comparer les changements
      */

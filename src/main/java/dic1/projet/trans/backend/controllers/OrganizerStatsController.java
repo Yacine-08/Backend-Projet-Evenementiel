@@ -59,4 +59,14 @@ public class OrganizerStatsController {
                                              @RequestParam(value = "months", required = false, defaultValue = "6") int months) {
         return ResponseEntity.ok(bookingService.getMonthlySalesForOrganizer(userId, months));
     }
+
+    @GetMapping("/{userId}/events/categories-count")
+    public ResponseEntity<?> getEventCategoriesCount(@PathVariable("userId") String userId) {
+        return ResponseEntity.ok(eventService.getEventCategoryCountsByOrganizer(userId));
+    }
+
+    @GetMapping("/{userId}/events/fill-rate")
+    public ResponseEntity<?> getEventFillRates(@PathVariable("userId") String userId) {
+        return ResponseEntity.ok(eventService.getEventFillRatesByOrganizer(userId));
+    }
 }
