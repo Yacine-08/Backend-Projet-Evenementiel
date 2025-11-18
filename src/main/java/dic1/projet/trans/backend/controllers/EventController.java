@@ -305,10 +305,22 @@ public class EventController {
             @RequestParam(required = false, name = "date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false, name = "location") String location,
             @RequestParam(required = false, name = "typeEvent") String typeEvent,
-            @RequestParam(required = false, name = "eventStatus") String eventStatus) {
-
-        List<Event> events = eventService.searchEvents(title, date, location, typeEvent, eventStatus);
-        return events;
+            @RequestParam(required = false, name = "eventStatus") String eventStatus,
+            @RequestParam(required = false, name = "category") String category) {
+        
+        // Only search by category if it's provided and not empty
+        if (category != null && !category.trim().isEmpty()) {
+            System.out.println("Recherche par catégorie: " + category);
+            System.out.println("Requête générée: " + "{'category': {$regex: '^" + category + "$', $options: 'i'}}");
+            
+            List<Event> results = eventRepository.findByCategory(category);
+            System.out.println("Résultats trouvés: " + results.size());
+            results.forEach(e -> System.out.println(" - " + e.getTitle() + " (Catégorie: " + e.getCategory() + ")"));
+            return results;
+        }
+        
+        // If no category is provided, use the service's search method with all other parameters
+        return eventService.searchEvents(title, date, location, typeEvent, eventStatus, null);
     }
     @GetMapping("/{eventId}/booking-count")
     @Operation(summary = "Get event booking count", description = "Get the number of bookings for a specific event")

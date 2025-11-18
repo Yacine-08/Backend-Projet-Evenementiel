@@ -20,12 +20,13 @@ import dic1.projet.trans.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import dic1.projet.trans.backend.exceptions.ResourceNotFoundException;
 
 import java.text.Normalizer;
-import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -41,18 +42,21 @@ public class EventService {
     private final TicketService ticketService;
     private final BookingRepository bookingRepository;
     private final TicketRepository ticketRepository;
+    private final MongoTemplate mongoTemplate;
 
     @Autowired
     public EventService(EventRepository eventRepository, 
                        NotificationService notificationService,
                        TicketService ticketService,
                        BookingRepository bookingRepository,
-                       TicketRepository ticketRepository) {
+                       TicketRepository ticketRepository,
+                       MongoTemplate mongoTemplate) {
         this.eventRepository = eventRepository;
         this.notificationService = notificationService;
         this.ticketService = ticketService;
         this.bookingRepository = bookingRepository;
         this.ticketRepository = ticketRepository;
+        this.mongoTemplate = mongoTemplate;
     }
 
     /**
@@ -464,141 +468,58 @@ public class EventService {
         eventRepository.deleteById(id);
     }
 
-    public List<Event> searchEvents(String title, LocalDate date, String location, String typeEvent, String eventStatus) {
+    public List<Event> searchEvents(String title, LocalDate date, String location, String typeEvent, String eventStatus, String category) {
         try {
-            // create a list to store results
-            List<Event> results = new ArrayList<>();
+            // Créer un critère de recherche dynamique
+            Criteria criteria = new Criteria();
+            List<Criteria> criteriaList = new ArrayList<>();
 
-            // tracks if any search criteria were provided
-            boolean hasSearchCriteria = false;
-
-            // search by title (insensible a la casse et aux accents)
+            // Ajouter les critères uniquement si les paramètres ne sont pas nuls ni vides
             if (title != null && !title.trim().isEmpty()) {
-                hasSearchCriteria = true;
-                String normalizedTitle = normalizeText(title);
-
-                // create a search pattern
-                String searchPattern = ".*" + Pattern.quote(normalizedTitle) + ".*";
-                results = eventRepository.findByTitle(searchPattern);
+                criteriaList.add(Criteria.where("title").regex(Pattern.quote(title), "i"));
             }
-
-            // search by location (insensible à la casse et aux accents)
-//            if (location != null && !location.trim().isEmpty()) {
-//                hasSearchCriteria = true;
-//                String normalizedLocation = normalizeText(location);
-//
-//                // create a search pattern
-//                String searchPattern = ".*" + Pattern.quote(normalizedLocation) + ".*";
-//                List<Event> byLocation = eventRepository.findByLocation(searchPattern);
-//                System.out.println("Résultats par localisation: " + byLocation.size() + " pour: " + location.trim());
-//
-//                if (results.isEmpty()) {
-//                    results = byLocation;
-//                } else {
-//                    // Create a map of existing results by ID for faster lookup
-//                    Map<String, Event> resultMap = new HashMap<>();
-//                    for (Event event : results) {
-//                        resultMap.put(event.getIdEvent(), event);
-//                    }
-//
-//                    // Find common events by ID
-//                    List<Event> intersection = new ArrayList<>();
-//                    for (Event event : byLocation) {
-//                        if (resultMap.containsKey(event.getIdEvent())) {
-//                            intersection.add(event);
-//                        }
-//                    }
-//                    results = intersection;
-//                }
-//            }
-
-            // search by type (insensible à la casse et aux accents)
-            if (typeEvent != null && !typeEvent.trim().isEmpty()) {
-                hasSearchCriteria = true;
-                String normalizedType = normalizeText(typeEvent);
-                // Créer un motif de recherche insensible à la casse et aux accents
-                String searchPattern = "^" + Pattern.quote(normalizedType) + "$";
-                List<Event> byType = eventRepository.findByTypeEvent(searchPattern);
-
-                if (results.isEmpty()) {
-                    results = byType;
-                } else {
-                    // Create a map of existing results by ID for faster lookup
-                    Map<String, Event> resultMap = new HashMap<>();
-                    for (Event event : results) {
-                        resultMap.put(event.getIdEvent(), event);
-                    }
-
-                    // Find common events by ID
-                    List<Event> intersection = new ArrayList<>();
-                    for (Event event : byType) {
-                        if (resultMap.containsKey(event.getIdEvent())) {
-                            intersection.add(event);
-                        }
-                    }
-                    results = intersection;
-                }
-            }
-
-            // search by status (insensible à la casse)
-            if (eventStatus != null && !eventStatus.trim().isEmpty()) {
-                hasSearchCriteria = true;
-                String statusTerm = eventStatus.trim().toUpperCase();
-                List<Event> byStatus;
-
-                try {
-                    // Convertir le statut en enum et effectuer la recherche
-                    EventStatus status = EventStatus.valueOf(statusTerm);
-                    byStatus = eventRepository.findByEventStatus(status);
-
-                    // Mettre à jour les résultats
-                    if (results.isEmpty()) {
-                        results = byStatus;
-                    } else {
-                        results.retainAll(byStatus);
-                    }
-                } catch (IllegalArgumentException e) {
-                    System.err.println("Statut d'événement non valide: " + statusTerm);
-                    throw new IllegalArgumentException("Statut d'événement non valide: " + statusTerm +
-                            ". Les valeurs possibles sont: " +
-                            Arrays.toString(EventStatus.values()));
-                }
-            }
-
-            // search by date
+            
             if (date != null) {
-                hasSearchCriteria = true;
                 LocalDateTime startOfDay = date.atStartOfDay();
                 LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
-                List<Event> byDate = eventRepository.findByDateTimeStartBetween(startOfDay, endOfDay);
-
-                if (results.isEmpty()) {
-                    results = byDate;
-                } else {
-                    // Create a map of existing results by ID for faster lookup
-                    Map<String, Event> resultMap = new HashMap<>();
-                    for (Event event : results) {
-                        resultMap.put(event.getIdEvent(), event);
-                    }
-
-                    // Find common events by ID
-                    List<Event> intersection = new ArrayList<>();
-                    for (Event event : byDate) {
-                        if (resultMap.containsKey(event.getIdEvent())) {
-                            intersection.add(event);
-                        }
-                    }
-                    results = intersection;
+                criteriaList.add(Criteria.where("dateTimeStart").gte(startOfDay).lte(endOfDay));
+            }
+            
+            if (location != null && !location.trim().isEmpty()) {
+                criteriaList.add(Criteria.where("location").regex(Pattern.quote(location), "i"));
+            }
+            
+            if (typeEvent != null && !typeEvent.trim().isEmpty()) {
+                criteriaList.add(Criteria.where("typeEvent").is(typeEvent));
+            }
+            
+            if (eventStatus != null && !eventStatus.trim().isEmpty()) {
+                try {
+                    EventStatus status = EventStatus.valueOf(eventStatus.trim().toUpperCase());
+                    criteriaList.add(Criteria.where("eventStatus").is(status));
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Statut d'événement non valide: " + eventStatus +
+                            ". Les valeurs possibles sont: " + Arrays.toString(EventStatus.values()));
                 }
             }
-
-            // Si aucun critère de recherche n'est fourni, retourner tous les événements
-            if (!hasSearchCriteria) {
-                return (List<Event>) eventRepository.findAll();
+            
+            if (category != null && !category.trim().isEmpty()) {
+                criteriaList.add(Criteria.where("category").regex("^" + Pattern.quote(category) + "$", "i"));
             }
-
-            return results;
+            
+            // Si aucun critère n'est spécifié, retourner tous les événements
+            if (criteriaList.isEmpty()) {
+                return eventRepository.findAll();
+            }
+            
+            // Combiner les critères avec un ET logique
+            criteria.andOperator(criteriaList.toArray(new Criteria[0]));
+            
+            // Exécuter la requête
+            Query query = new Query(criteria);
+            return mongoTemplate.find(query, Event.class);
         } catch (Exception e) {
+            // En cas d'erreur, relancer l'exception pour une meilleure gestion des erreurs
             throw new RuntimeException("Erreur lors de la recherche d'événements", e);
         }
     }

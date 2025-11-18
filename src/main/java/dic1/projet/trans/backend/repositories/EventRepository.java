@@ -2,6 +2,7 @@ package dic1.projet.trans.backend.repositories;
 
 import dic1.projet.trans.backend.entities.Event;
 import dic1.projet.trans.backend.enums.EventStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.data.mongodb.repository.MongoRepository;
@@ -48,6 +49,12 @@ public interface EventRepository extends MongoRepository<Event, String> {
     List<Event> findByOrganizerIdUser(String organizerId);
 
     List<Event> findByOrganizerIdUser(String organizerId, Sort sort);
+
+    List<Event> findByOrganizerIdUser(String organizerId, Pageable pageable);
+    
+    // search by category (insensitive à la casse et aux accents)
+    @Query("{'category': {$regex: ?0, $options: 'i'}}")
+    List<Event> findByCategory(String category);
 
     @Query(value = "{ 'eventStatus': 'PUBLISHED', 'dateTimeEnd': { $gte: ?0 } }", sort = "{ 'dateTimeStart': -1 }")
     List<Event> findAllAvailableEvents(LocalDateTime currentDate);
