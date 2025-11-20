@@ -49,6 +49,18 @@ public class OrganizerStatsController {
         return ResponseEntity.ok(bookingService.getRecentBookingsForOrganizer(userId, limit, st));
     }
 
+    @GetMapping("/{userId}/bookings")
+    public ResponseEntity<?> getAllBookings(@PathVariable("userId") String userId,
+                                            @RequestParam(value = "status", required = false) String status) {
+        BookingStatus st = null;
+        if (status != null) {
+            try {
+                st = BookingStatus.valueOf(status.trim().toUpperCase());
+            } catch (IllegalArgumentException ignored) {}
+        }
+        return ResponseEntity.ok(bookingService.getAllBookingsForOrganizer(userId, st));
+    }
+
     @GetMapping("/{userId}/events/revenues")
     public ResponseEntity<?> getEventRevenues(@PathVariable("userId") String userId) {
         return ResponseEntity.ok(eventService.getEventRevenuesByOrganizer(userId));

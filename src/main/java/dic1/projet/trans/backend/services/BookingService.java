@@ -281,6 +281,41 @@ public class BookingService {
         }).filter(Objects::nonNull).toList();
     }
 
+    public List<BookingDetailsDTO> getAllBookingsForOrganizer(String organizerId, BookingStatus status) {
+        List<Event> events = eventRepository.findByOrganizerIdUser(organizerId);
+        List<String> eventIds = events.stream().map(Event::getIdEvent).toList();
+        if (eventIds.isEmpty()) return Collections.emptyList();
+
+        List<Booking> bookings = (status != null)
+                ? bookingRepository.findByEventIdInAndBookingStatusOrderByBookingDateDesc(eventIds, status)
+                : bookingRepository.findByEventIdInOrderByBookingDateDesc(eventIds);
+
+        Map<String, Event> eventMap = events.stream().collect(Collectors.toMap(Event::getIdEvent, e -> e));
+
+        List<String> ticketIds = bookings.stream()
+                .flatMap(b -> b.getTickets().stream())
+                .map(Booking.ReservedTicket::getTicketId)
+                .distinct()
+                .toList();
+        Map<String, Ticket> tickets = ticketRepository.findAllById(ticketIds).stream()
+                .collect(Collectors.toMap(Ticket::getTicketId, t -> t));
+
+        return bookings.stream().map(b -> {
+            Event ev = eventMap.get(b.getEventId());
+            if (ev == null) return null;
+            List<Ticket> bookedTickets = b.getTickets().stream()
+                    .map(rt -> tickets.get(rt.getTicketId()))
+                    .filter(Objects::nonNull)
+                    .toList();
+            BookingDetailsDTO dto = BookingDetailsDTO.fromBookingAndEvent(b, ev, bookedTickets);
+            userRepository.findById(b.getClientId()).ifPresent(u -> {
+                String full = ((u.getFirstName() != null ? u.getFirstName() : "") + " " + (u.getLastName() != null ? u.getLastName() : "")).trim();
+                dto.setClientName(full.isEmpty() ? (u.getUsername() != null ? u.getUsername() : u.getEmail()) : full);
+            });
+            return dto;
+        }).filter(Objects::nonNull).toList();
+    }
+
     public List<dic1.projet.trans.backend.dtos.MonthlySalesDTO> getMonthlySalesForOrganizer(String organizerId, int months) {
         List<Event> events = eventRepository.findByOrganizerIdUser(organizerId);
         List<String> eventIds = events.stream().map(Event::getIdEvent).toList();
